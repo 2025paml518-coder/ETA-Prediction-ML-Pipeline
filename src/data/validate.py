@@ -165,7 +165,8 @@ def validate_frame(frame: pd.DataFrame, params: dict) -> tuple[pd.DataFrame, pd.
 
     quarantined = frame.loc[fatal_mask].copy()
     quarantined["quarantine_reason"] = reasons.loc[fatal_mask]
-    quarantined["quarantined_at_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+    # No wall-clock stamp per row: it would make the quarantine artefact differ on
+    # every rebuild. The batch timestamp lives in the validation report instead.
 
     validated = _repair(frame.loc[~fatal_mask], cfg)
     validated = validated.drop(columns=["straight_line_km"]).reset_index(drop=True)
