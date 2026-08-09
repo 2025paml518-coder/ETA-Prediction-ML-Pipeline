@@ -187,3 +187,165 @@ embed a wall-clock generation timestamp. That is provenance rather than data, an
 deliberately kept. The per-row `quarantined_at_utc` column was removed for the same
 reason: a timestamp on every quarantined row made a *data* artefact unreproducible for
 no analytical benefit, since the batch timestamp is already in the report.
+
+---
+
+### D10. Imputation moved out of validation and into the feature pipeline
+
+**Decision.** Validation no longer fills missing weather or passenger counts. It leaves
+those nulls intact and quarantines nothing for them. The feature pipeline learns the
+fill values from the training partition, persists them in `speed_priors.json`, and
+applies them inside `transform`.
+
+**Why it changed.** The original design computed month-level medians from the whole
+batch during validation, which runs *before* the split. That broke all three of the
+requirements M2 2.6.4 calls non-negotiable:
+
+1. the fill value was computed from validation and test rows, not training rows alone;
+2. it was never persisted, so it could not be reused;
+3. serving would therefore have had to recompute it from production data — the precise
+   mechanism that introduces the distribution differences the chapter warns about.
+
+**Consequence for the schema.** The validated table now declares the imputable
+covariates as nullable. The contract is honest about what it guarantees: required
+fields are present and in range, repairable fields may be absent and are the feature
+pipeline's responsibility.
+
+**Why the indicator is kept.** `weather_imputed` and `passenger_count_imputed` are
+recorded before filling. Missingness is rarely random, so the flag is a feature in its
+own right — the "indicator + fill" row of M2 Table 2.3, which is the only strategy the
+table lists with no associated ML risk.
+
+---
+
+### D11. Level 3 statistical validation with a training baseline
+
+**Decision.** A `profile` stage builds a baseline from the training partition:
+per-feature mean, standard deviation, quantiles, null rate, category frequencies, and a
+seeded 2,000-value reference sample per continuous column. `validate` accepts an
+optional `--baseline` and compares each incoming batch against it.
+
+**Why a stored sample rather than summary statistics alone.** Summary statistics
+support a mean-shift check but not a Kolmogorov-Smirnov test, which needs the reference
+distribution. Retaining a deterministic subsample keeps the artefact small while
+allowing the actual two-sample test the chapter names.
+
+**Why the baseline cannot be built from the batch under test.** A baseline computed
+from the same rows it is judging can never show that those rows have moved. It is
+therefore fitted on train only, which also means the first pass over a fresh dataset
+has nothing to compare against — Level 3 reports "skipped" rather than inventing a
+result.
+
+**Thresholds, and why a p-value alone is not the trigger.** With ~100k baseline rows a
+KS test reaches significance on differences far too small to act on: in the festival
+surge trial, `wind_kph` produced a p-value of 3.7e-13 for a mean shift of 0.013
+standard deviations. Significance is therefore necessary but not sufficient — a
+minimum effect size must also be met before warning, and the decision to *fail* is
+driven by shift magnitude: warn beyond one baseline standard deviation, fail beyond
+two, exactly as M2 2.5.3 recommends. This directly addresses the maintainability
+concern in the chapter's review questions: a validation layer that cries wolf on every
+batch is worse than none.
+
+**Validation of the design.** Against a `festival_surge` batch the ranking came out as
+the intervention predicts — `avg_speed_kmph` (KS 0.52), `traffic_index` (0.40) and
+`trip_duration_min` (0.28) all warned, while the four coordinate features passed. A
+surge changes congestion, not geography.
+
+---
+
+### D12. Level 4 business rules
+
+**Decision.** Four compound rules that no single-column check can express:
+
+| Rule | What it catches |
+| --- | --- |
+| `BR_PRECIPITATION_WITHOUT_WET_WEATHER` | Rain measured while the sky is reported clear |
+| `BR_SNOW_ABOVE_FREEZING` | Snow recorded well above freezing |
+| `BR_PARTIAL_WEATHER_RECORD` | A weather join that half-succeeded |
+| `BR_STATIONARY_LONG_TRIP` | The vehicle never moved, but the meter ran for an hour |
+
+**Why they matter more than range checks.** Every value involved is individually legal,
+so Levels 1 and 2 pass them without comment. These are the violations most likely to
+indicate a real upstream defect rather than noise — a broken join, a mislabelled feed,
+a unit change. The generator plants `inconsistent_weather` at a known rate specifically
+so this level can be shown to work: 590 rows were caught in the tagged run.
+
+---
+
+### D13. Six data quality dimensions are measured, not assumed
+
+**Decision.** `src/data/quality.py` measures each dimension of M2 Table 2.1 separately
+and reports them in `reports/validation/data_quality_dimensions.md`.
+
+**Why separately.** Collapsing everything into one "rows rejected" number destroys the
+diagnostic value. A completeness problem and a uniqueness problem demand different
+responses — one is an imputation strategy, the other an idempotency bug in the
+upstream pipeline — so they are counted and reported apart.
+
+**Accuracy is reported as unmeasurable, deliberately.** No rule can tell whether a
+recorded duration is the duration that actually elapsed. Rather than omit the
+dimension or fake a check, the report states that establishing accuracy requires a
+sampling audit against raw GPS traces, and offers implied-speed plausibility as a
+proxy. Naming the limit is more useful than hiding it.
+
+**Timeliness is measured against the batch, not the clock.** Wall-clock age would make
+the metric change on every run and break reproducibility. Record age is expressed
+relative to the newest event in the batch instead.
+
+---
+
+### D14. Idempotent writes, and the batch ingestion pattern
+
+**Decision.** Every stage writes to a staging path and then atomically replaces its
+target (`src/utils/io.py`). Ingestion is batch.
+
+**Why staging then swap.** A stage that writes directly to its target is not safe to
+retry: a crash midway leaves a truncated file that the next stage cannot distinguish
+from a complete one. `os.replace` is atomic within a filesystem, so a stage either
+produces a whole output or leaves the previous one untouched — the pattern M2 2.4.1
+prescribes.
+
+**Why batch rather than streaming or CDC.** M2 2.4 recommends batch as the default and
+evolving only when the business case is clear. ETA prediction is request-driven: the
+model is retrained on accumulated history, and the features an inference request needs
+(distance, time of day, weather, traffic) arrive with the request itself rather than
+being pre-aggregated from an event stream. Streaming would add consumer groups, offset
+tracking and state management for no freshness the system can use. CDC would be the
+right answer if trip records were amended after the fact — a fare dispute revising a
+duration — which is a plausible extension but not part of this dataset.
+
+**Data model.** Parquet on a local filesystem with a DVC-managed remote, which is a
+minimal Lakehouse-shaped arrangement: columnar files plus a versioned metadata layer
+giving reproducible historical access. A relational store was not used because feature
+construction is an OLAP workload — large columnar aggregations — and M2 2.3.1 is
+explicit that running those against an OLTP schema is the wrong architecture.
+
+**Feature store.** Not adopted. M2 2.10 puts the crossover at roughly 100+ models
+across multiple teams; this project has one model and three engineers, where the shared
+feature module plus serialised parameters gives the same consistency guarantee at a
+fraction of the operational cost. The offline/online split is nonetheless mirrored in
+miniature: `speed_priors.json` is a small offline artefact of pre-computed
+zone-and-hour aggregates, loaded once by the service and used for every request.
+
+---
+
+## M2 requirement coverage
+
+| M2 section | Requirement | Where |
+| --- | --- | --- |
+| 2.2 | Six data quality dimensions measured | `src/data/quality.py` |
+| 2.3 | Data model choice justified | D14 |
+| 2.4 | Ingestion pattern choice justified | D14 |
+| 2.4.1 | Idempotent writes | `src/utils/io.py` |
+| 2.5.1 | Level 1 schema validation | `src/data/schema.py` |
+| 2.5.2 | Level 2 range and domain | `src/data/validate.py` |
+| 2.5.3 | Level 3 statistical validation | `src/data/statistical_validation.py` |
+| 2.5.4 | Level 4 business rules | `src/data/validate.py` |
+| 2.5.4 | Fail loudly, stop the pipeline | `ValidationFailure` |
+| 2.6.1 | Categorical encoding; target-encoding leakage | D6, `build_features.py` |
+| 2.6.3 | Cyclical sin/cos temporal features | `build_features.py` |
+| 2.6.4 | Imputation: train-only, persisted, reused | D10 |
+| 2.7 | Training-serving skew prevention | D7, `tests/test_skew.py` |
+| 2.8 | Feature store evaluated | D14 |
+| 2.8.3 | Point-in-time correctness | D5 |
+| 2.9 | Data lineage | DVC lock + generation metadata; MLflow in Week 2 |

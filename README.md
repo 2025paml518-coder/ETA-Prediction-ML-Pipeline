@@ -28,6 +28,8 @@ flowchart LR
         VAL -->|repairable| CLEAN[(validated<br/>trips)]
         CLEAN --> SPLIT[Temporal split<br/>train / val / test]
         SPLIT --> FEAT[FeaturePipeline<br/>fit on train only]
+        SPLIT --> PROF[Baseline profile<br/>Level 3 reference]
+        PROF -.->|next batch| VAL
         FEAT --> PROC[(feature<br/>tables)]
         FEAT --> FART[/feature pipeline<br/>artefact/]
     end
@@ -86,9 +88,9 @@ Exact resolved versions are pinned in `requirements.lock.txt`.
 ## Reproduce the pipeline
 
 ```powershell
-dvc repro          # runs generate -> validate -> split -> features
+dvc repro          # generate -> validate -> split -> features -> profile
 dvc push           # store data artefacts in the configured remote
-pytest             # guards over validation, features and skew
+pytest             # guards over validation, features, statistics and skew
 ruff check .
 ```
 
@@ -111,16 +113,35 @@ Full breakdown: [reports/validation/validation_report.md](reports/validation/val
 
 ### Data quality handling
 
-Defects are split into two classes, because treating them identically is how
+Validation is organised as the four levels of M2 section 2.5:
+
+| Level | Check | Implementation |
+| --- | --- | --- |
+| 1 | Schema — columns, dtypes, required fields | pandera contract in [src/data/schema.py](src/data/schema.py) |
+| 2 | Range and domain — bounds, allowed values | [src/data/validate.py](src/data/validate.py) |
+| 3 | Statistical — KS, chi-squared and mean shift vs. a training baseline | [src/data/statistical_validation.py](src/data/statistical_validation.py) |
+| 4 | Business rules — compound, cross-field constraints | [src/data/validate.py](src/data/validate.py) |
+
+Level 3 needs a baseline built from the training partition, which is downstream of
+validation, so it reports `skipped` on the first pass over a fresh dataset and runs on
+every batch ingested afterwards.
+
+Defects are then split into two classes, because treating them identically is how
 pipelines quietly lose data:
 
 | Class | Examples | Action |
 | --- | --- | --- |
-| **Fatal** | missing GPS, dropoff before pickup, impossible speed, duplicate id | Quarantined with a reason code — never silently dropped |
-| **Repairable** | missing weather, missing passenger count | Imputed from month-level statistics, with the imputation recorded as a boolean feature |
+| **Fatal** | missing GPS, dropoff before pickup, impossible speed, duplicate id, cross-field contradiction | Quarantined with a reason code — never silently dropped |
+| **Repairable** | missing weather, missing passenger count | Nulls carried forward and imputed by the feature pipeline, with the imputation recorded as a boolean feature |
 
 The stage aborts the pipeline if the quarantine rate exceeds 15%: a spike means the
 upstream feed changed shape, which is a different failure from ordinary noise.
+
+All six data quality dimensions are measured per batch rather than collapsed into a
+single rejection count — see
+[reports/validation/data_quality_dimensions.md](reports/validation/data_quality_dimensions.md).
+Accuracy is reported as *not directly measurable*, with implied-speed plausibility as a
+proxy, because no rule can tell whether a recorded duration is the one that elapsed.
 
 ### Engineered features
 
@@ -144,6 +165,10 @@ load so a stale artefact fails fast instead of silently reordering columns.
 The artefact is plain JSON, not a pickle. Zone assignment is nearest-centroid, so only
 the centroids need to be stored — which keeps the serving path free of arbitrary-code
 deserialisation and decouples the container from the scikit-learn version used to train.
+
+Imputation values live in the same artefact. They are learned from the training
+partition, persisted, and applied inside `transform`, so serving never recomputes a
+fill value from production data.
 
 ### Reproducibility
 
