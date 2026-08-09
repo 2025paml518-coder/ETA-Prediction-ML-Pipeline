@@ -22,7 +22,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -125,6 +124,7 @@ class FeaturePipeline:
     random_state: int = 42
 
     kmeans: KMeans | None = field(default=None, repr=False)
+    zone_centroids: np.ndarray | None = field(default=None, repr=False)
     zone_hour_speed: pd.DataFrame | None = field(default=None, repr=False)
     route_speed: pd.DataFrame | None = field(default=None, repr=False)
     zone_speed: pd.DataFrame | None = field(default=None, repr=False)
@@ -158,6 +158,9 @@ class FeaturePipeline:
         self.kmeans = KMeans(
             n_clusters=self.n_zone_clusters, random_state=self.random_state, n_init=5
         ).fit(coords)
+        # Only the centroids are retained. Zone assignment is nearest-centroid, so the
+        # fitted estimator adds nothing at inference time beyond a pickle dependency.
+        self.zone_centroids = np.round(self.kmeans.cluster_centers_.astype(np.float64), 9)
 
         work = pd.DataFrame(
             {
@@ -187,7 +190,7 @@ class FeaturePipeline:
     # ------------------------------------------------------------- transform
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Build the model-ready feature matrix in the canonical column order."""
-        if self.kmeans is None:
+        if self.zone_centroids is None:
             raise FeaturePipelineNotFitted("Call fit() or load() before transform()")
         self._require_columns(frame)
 
@@ -248,7 +251,7 @@ class FeaturePipeline:
 
         pickup_zone = self._assign_zone(frame, "pickup")
         dropoff_zone = self._assign_zone(frame, "dropoff")
-        centroids = self.kmeans.cluster_centers_
+        centroids = self.zone_centroids
         out["pickup_zone_lat"] = centroids[pickup_zone, 0]
         out["pickup_zone_lon"] = centroids[pickup_zone, 1]
         out["dropoff_zone_lat"] = centroids[dropoff_zone, 0]
@@ -303,8 +306,10 @@ class FeaturePipeline:
         return distance / frame[TARGET].to_numpy(dtype=float) * 60.0
 
     def _assign_zone(self, frame: pd.DataFrame, prefix: str) -> np.ndarray:
+        """Nearest-centroid assignment, identical to ``KMeans.predict``."""
         coords = frame[[f"{prefix}_latitude", f"{prefix}_longitude"]].to_numpy(dtype=float)
-        return self.kmeans.predict(coords)
+        distances = ((coords[:, None, :] - self.zone_centroids[None, :, :]) ** 2).sum(axis=2)
+        return distances.argmin(axis=1)
 
     def _lookup(self, keys: pd.DataFrame, table: pd.DataFrame, on: list[str]) -> np.ndarray:
         """Join a learned prior, falling back zone-level then global for unseen keys."""
@@ -323,9 +328,9 @@ class FeaturePipeline:
     def save(self, directory: str | Path) -> Path:
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.kmeans, directory / "zone_kmeans.joblib")
         priors = {
             "global_speed": self.global_speed,
+            "zone_centroids": self.zone_centroids.tolist(),
             "zone_hour_speed": self.zone_hour_speed.to_dict("records"),
             "route_speed": self.route_speed.to_dict("records"),
             "zone_speed": self.zone_speed.to_dict("records"),
@@ -352,7 +357,7 @@ class FeaturePipeline:
             rush_hours_evening=tuple(spec["rush_hours_evening"]),
             random_state=spec["random_state"],
         )
-        pipeline.kmeans = joblib.load(directory / "zone_kmeans.joblib")
+        pipeline.zone_centroids = np.asarray(priors["zone_centroids"], dtype=np.float64)
         pipeline.global_speed = priors["global_speed"]
         pipeline.zone_hour_speed = pd.DataFrame(priors["zone_hour_speed"])
         pipeline.route_speed = pd.DataFrame(priors["route_speed"])

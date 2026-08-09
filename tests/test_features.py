@@ -87,3 +87,29 @@ def test_cyclical_encodings_stay_on_the_unit_circle(fitted):
     for prefix in ("hour", "dow", "month", "bearing"):
         radius = features[f"{prefix}_sin"] ** 2 + features[f"{prefix}_cos"] ** 2
         np.testing.assert_allclose(radius.to_numpy(), 1.0, atol=1e-9)
+
+
+def test_nearest_centroid_matches_sklearn_predict(fitted):
+    """The hand-rolled assignment must equal what KMeans.predict would have returned."""
+    pipeline, frame = fitted
+    sample = frame.head(500)
+    coords = sample[["pickup_latitude", "pickup_longitude"]].to_numpy(dtype=float)
+    np.testing.assert_array_equal(
+        pipeline._assign_zone(sample, "pickup"), pipeline.kmeans.predict(coords)
+    )
+
+
+def test_saved_artifact_is_byte_stable_across_refits(params, clean_trips, tmp_path):
+    """Refitting on identical data must produce identical artefact bytes.
+
+    Pickled estimators failed this, which made every `dvc repro` dirty the lock file
+    even when nothing had actually changed.
+    """
+    from src.data.validate import validate_frame
+
+    validated, _, _ = validate_frame(clean_trips, params)
+    first = FeaturePipeline.from_params(params).fit(validated).save(tmp_path / "a")
+    second = FeaturePipeline.from_params(params).fit(validated).save(tmp_path / "b")
+
+    for name in ("speed_priors.json", "feature_spec.json"):
+        assert (first / name).read_bytes() == (second / name).read_bytes(), name
