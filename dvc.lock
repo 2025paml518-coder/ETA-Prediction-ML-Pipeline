@@ -1,0 +1,217 @@
+schema: '2.0'
+stages:
+  generate:
+    cmd: python -m src.data.generate_synthetic
+    deps:
+    - path: src/data/generate_synthetic.py
+      hash: md5
+      md5: 72f2d0f5344fce00431d622a608411fd
+      size: 20609
+    - path: src/utils/geo.py
+      hash: md5
+      md5: 1d1e559337fc2ff9a36c1e8227e08d33
+      size: 1775
+    params:
+      params.yaml:
+        generate:
+          n_trips: 150000
+          start_date: '2024-01-01'
+          end_date: '2024-12-31'
+          scenario: baseline
+          output_file: trips_raw.parquet
+          defect_rates:
+            missing_gps: 0.012
+            invalid_timestamp: 0.006
+            out_of_bounds_gps: 0.004
+            duplicate_trip_id: 0.003
+            extreme_duration: 0.005
+            missing_weather: 0.008
+            missing_passenger_count: 0.004
+            impossible_speed: 0.003
+        seed: 42
+    outs:
+    - path: data/raw/trips_raw.meta.json
+      hash: md5
+      md5: 50fdb709cc03065d486f87b83c5927e0
+      size: 1279
+    - path: data/raw/trips_raw.parquet
+      hash: md5
+      md5: 81549803334a3e7191a3512f97e49b4d
+      size: 8437614
+  validate:
+    cmd: python -m src.data.validate
+    deps:
+    - path: data/raw/trips_raw.parquet
+      hash: md5
+      md5: 81549803334a3e7191a3512f97e49b4d
+      size: 8437614
+    - path: src/data/schema.py
+      hash: md5
+      md5: 60ed9b4520020f1c2240202b42cdd74d
+      size: 3403
+    - path: src/data/validate.py
+      hash: md5
+      md5: 526e60c61f0a6f552033227d4608bdbc
+      size: 13102
+    - path: src/utils/geo.py
+      hash: md5
+      md5: 1d1e559337fc2ff9a36c1e8227e08d33
+      size: 1775
+    params:
+      params.yaml:
+        validate:
+          max_bad_row_fraction: 0.15
+          min_rows: 10000
+          bounds:
+            latitude:
+            - 40.55
+            - 40.95
+            longitude:
+            - -74.1
+            - -73.7
+            trip_duration_min:
+            - 1.0
+            - 300.0
+            avg_speed_kmph:
+            - 1.0
+            - 120.0
+            passenger_count:
+            - 1
+            - 6
+            temperature_c:
+            - -25.0
+            - 45.0
+            precipitation_mm:
+            - 0.0
+            - 80.0
+            wind_kph:
+            - 0.0
+            - 120.0
+            traffic_index:
+            - 0.0
+            - 1.0
+          allowed_weather:
+          - Clear
+          - Cloudy
+          - Rain
+          - Snow
+          - Fog
+          allowed_vendors:
+          - 1
+          - 2
+          - 3
+    outs:
+    - path: data/interim/trips_validated.parquet
+      hash: md5
+      md5: 88eb81a81c74b6589749f0b43d4805c2
+      size: 11135216
+    - path: data/quarantine/quarantined_trips.parquet
+      hash: md5
+      md5: c5795320d9b4dab765ca6573d3e51f43
+      size: 415078
+    - path: reports/validation
+      hash: md5
+      md5: 60d59b58f3621132dd723cac6a19c83b.dir
+      size: 2372
+      nfiles: 2
+  split:
+    cmd: python -m src.data.split
+    deps:
+    - path: data/interim/trips_validated.parquet
+      hash: md5
+      md5: 88eb81a81c74b6589749f0b43d4805c2
+      size: 11135216
+    - path: src/data/split.py
+      hash: md5
+      md5: 27089d125e3a9026a125c9b8366d0a7a
+      size: 3231
+    params:
+      params.yaml:
+        split:
+          strategy: temporal
+          val_fraction: 0.15
+          test_fraction: 0.15
+    outs:
+    - path: data/interim/split_manifest.json
+      hash: md5
+      md5: dd74962b78cc3b634a17c5165ba35ec0
+      size: 455
+    - path: data/interim/test.parquet
+      hash: md5
+      md5: 822f1113b109653ec2a374c64a3ee746
+      size: 1922638
+    - path: data/interim/train.parquet
+      hash: md5
+      md5: ce53e5957999b6c66a405c269f1bd16d
+      size: 8180501
+    - path: data/interim/val.parquet
+      hash: md5
+      md5: a5ee45a608d78a2aef05fb62d11d7542
+      size: 1922833
+  features:
+    cmd: python -m src.features.make_features
+    deps:
+    - path: data/interim/test.parquet
+      hash: md5
+      md5: 822f1113b109653ec2a374c64a3ee746
+      size: 1922638
+    - path: data/interim/train.parquet
+      hash: md5
+      md5: ce53e5957999b6c66a405c269f1bd16d
+      size: 8180501
+    - path: data/interim/val.parquet
+      hash: md5
+      md5: a5ee45a608d78a2aef05fb62d11d7542
+      size: 1922833
+    - path: src/features/build_features.py
+      hash: md5
+      md5: a3176d79906f367134e6de3b3c09d2b0
+      size: 15696
+    - path: src/features/make_features.py
+      hash: md5
+      md5: de561706b0d247a0e6f15b113df59585
+      size: 2617
+    - path: src/utils/calendar_nyc.py
+      hash: md5
+      md5: e7e41662f919d341eed6e1aa7f9165d3
+      size: 1831
+    - path: src/utils/geo.py
+      hash: md5
+      md5: 1d1e559337fc2ff9a36c1e8227e08d33
+      size: 1775
+    params:
+      params.yaml:
+        features:
+          n_zone_clusters: 20
+          rush_hours_morning:
+          - 7
+          - 10
+          rush_hours_evening:
+          - 16
+          - 19
+          target: trip_duration_min
+          output_file: features.parquet
+        seed: 42
+    outs:
+    - path: data/processed/test_features.parquet
+      hash: md5
+      md5: 7ca824c0f668201350804059fef97c51
+      size: 2930239
+    - path: data/processed/train_features.parquet
+      hash: md5
+      md5: f107efc6ae9d774c3ddb5b8d3a39e944
+      size: 12852306
+    - path: data/processed/val_features.parquet
+      hash: md5
+      md5: 633a28139b9570cf8157cd6572871c56
+      size: 2930310
+    - path: models/feature_pipeline
+      hash: md5
+      md5: 6fcb10897170bc2908946aeb37c230eb.dir
+      size: 875452
+      nfiles: 3
+    - path: reports/features
+      hash: md5
+      md5: e6ee3e38639abb440888f8b097c7c8a3.dir
+      size: 2150
+      nfiles: 1

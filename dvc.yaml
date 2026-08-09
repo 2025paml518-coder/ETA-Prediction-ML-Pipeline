@@ -1,0 +1,67 @@
+# Week 1 (M2) data pipeline. Reproduce the whole thing with `dvc repro`.
+# Each stage declares its params, so changing a threshold in params.yaml
+# invalidates exactly the stages downstream of it and nothing else.
+
+stages:
+  generate:
+    cmd: python -m src.data.generate_synthetic
+    deps:
+      - src/data/generate_synthetic.py
+      - src/utils/geo.py
+    params:
+      - seed
+      - generate
+    outs:
+      - data/raw/trips_raw.parquet
+      - data/raw/trips_raw.meta.json
+
+  validate:
+    cmd: python -m src.data.validate
+    deps:
+      - src/data/validate.py
+      - src/data/schema.py
+      - src/utils/geo.py
+      - data/raw/trips_raw.parquet
+    params:
+      - validate
+    outs:
+      - data/interim/trips_validated.parquet
+      - data/quarantine/quarantined_trips.parquet
+      # cache: false keeps the human-readable report in Git rather than in the
+      # DVC cache, so reviewers can read it straight from the commit history.
+      - reports/validation:
+          cache: false
+
+  split:
+    cmd: python -m src.data.split
+    deps:
+      - src/data/split.py
+      - data/interim/trips_validated.parquet
+    params:
+      - split
+    outs:
+      - data/interim/train.parquet
+      - data/interim/val.parquet
+      - data/interim/test.parquet
+      - data/interim/split_manifest.json
+
+  features:
+    cmd: python -m src.features.make_features
+    deps:
+      - src/features/make_features.py
+      - src/features/build_features.py
+      - src/utils/geo.py
+      - src/utils/calendar_nyc.py
+      - data/interim/train.parquet
+      - data/interim/val.parquet
+      - data/interim/test.parquet
+    params:
+      - seed
+      - features
+    outs:
+      - data/processed/train_features.parquet
+      - data/processed/val_features.parquet
+      - data/processed/test_features.parquet
+      - models/feature_pipeline
+      - reports/features:
+          cache: false
