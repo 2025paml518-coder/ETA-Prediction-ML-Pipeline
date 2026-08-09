@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 
 import pandas as pd
 
 from src.config import ensure_dir, load_params, project_path
 from src.features.build_features import TARGET, FeaturePipeline
+from src.utils.io import atomic_write_json, atomic_write_parquet
 from src.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +51,7 @@ def main() -> None:
         features["trip_id"] = frame["trip_id"].to_numpy()
 
         destination = output_dir / f"{name}_features.parquet"
-        features.to_parquet(destination, index=False)
+        atomic_write_parquet(features, destination)
         summary["partitions"][name] = {
             "rows": int(len(features)),
             "target_mean": round(float(features[TARGET].mean()), 4),
@@ -60,7 +60,7 @@ def main() -> None:
         logger.info("%-5s -> %s (%s rows)", name, destination.name, f"{len(features):,}")
 
     pipeline.save(artifact_dir)
-    (report_dir / "feature_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    atomic_write_json(summary, report_dir / "feature_summary.json")
     logger.info("Saved feature pipeline artefacts -> %s", artifact_dir)
 
 

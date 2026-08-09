@@ -13,11 +13,11 @@ derived from validation or test data can leak into a feature.
 from __future__ import annotations
 
 import argparse
-import json
 
 import pandas as pd
 
 from src.config import ensure_dir, load_params, project_path
+from src.utils.io import atomic_write_json, atomic_write_parquet
 from src.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -65,7 +65,7 @@ def main() -> None:
     manifest = {"strategy": cfg["strategy"], "source": str(input_path.name), "partitions": {}}
     for name, part in parts.items():
         destination = output_dir / f"{name}.parquet"
-        part.to_parquet(destination, index=False)
+        atomic_write_parquet(part, destination)
         manifest["partitions"][name] = {
             "rows": int(len(part)),
             "start": part["pickup_datetime"].min().isoformat(),
@@ -79,7 +79,7 @@ def main() -> None:
             manifest["partitions"][name]["end"],
         )
 
-    (output_dir / "split_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    atomic_write_json(manifest, output_dir / "split_manifest.json")
 
 
 if __name__ == "__main__":

@@ -26,15 +26,15 @@ weekends. Everything downstream is a deterministic function of the seed.
 from __future__ import annotations
 
 import argparse
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
 
-from src.config import ensure_parent, load_params, project_path
+from src.config import load_params, project_path
 from src.utils.geo import haversine_km
+from src.utils.io import atomic_write_json, atomic_write_parquet
 from src.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -421,6 +421,15 @@ def inject_defects(
         frame.loc[frame.index[idx], "passenger_count"] = np.nan
     planted["missing_passenger_count"] = len(idx)
 
+    idx = pick(defect_rates.get("inconsistent_weather", 0.0))
+    if len(idx):
+        # Every value stays individually legal; only the combination is impossible.
+        frame.loc[frame.index[idx], "weather_condition"] = "Clear"
+        frame.loc[frame.index[idx], "precipitation_mm"] = np.round(
+            rng.uniform(1.0, 15.0, len(idx)), 2
+        )
+    planted["inconsistent_weather"] = len(idx)
+
     n_dupes = int(round(n * defect_rates.get("duplicate_trip_id", 0.0)))
     if n_dupes:
         source = rng.choice(n, size=n_dupes, replace=False)
@@ -463,9 +472,7 @@ def main() -> None:
         frame, planted = inject_defects(frame, gen["defect_rates"], seed)
         logger.info("Planted defects: %s", planted)
 
-    ensure_parent(output)
-    frame.to_parquet(output, index=False)
-
+    atomic_write_parquet(frame, output)
     metadata = {
         "generator_version": GENERATOR_VERSION,
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -480,7 +487,7 @@ def main() -> None:
         "defect_rates": {} if args.clean else gen["defect_rates"],
     }
     meta_path = output.with_suffix(".meta.json")
-    meta_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    atomic_write_json(metadata, meta_path)
 
     logger.info("Wrote %s rows -> %s", f"{len(frame):,}", output)
     logger.info("Wrote generation metadata -> %s", meta_path)
