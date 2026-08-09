@@ -136,11 +136,26 @@ upstream feed changed shape, which is a different failure from ordinary noise.
 ### Preventing training–serving skew
 
 Both the training pipeline and the API import the same `FeaturePipeline` class and
-load the same persisted artefact (`zone_kmeans.joblib`, `speed_priors.json`,
-`feature_spec.json`). `tests/test_skew.py` asserts that a single-row transform through
-a reloaded pipeline is bit-identical to the batched training transform, and
-`feature_spec.json` is checked on load so a stale artefact fails fast instead of
-silently reordering columns.
+load the same persisted artefact (`speed_priors.json`, `feature_spec.json`).
+`tests/test_skew.py` asserts that a single-row transform through a reloaded pipeline is
+bit-identical to the batched training transform, and `feature_spec.json` is checked on
+load so a stale artefact fails fast instead of silently reordering columns.
+
+The artefact is plain JSON, not a pickle. Zone assignment is nearest-centroid, so only
+the centroids need to be stored — which keeps the serving path free of arbitrary-code
+deserialisation and decouples the container from the scikit-learn version used to train.
+
+### Reproducibility
+
+Running `dvc repro --force` twice produces byte-identical output for every data and
+model artefact:
+
+| Artefact | Stable across rebuilds |
+| --- | --- |
+| `trips_raw.parquet`, `trips_validated.parquet`, `quarantined_trips.parquet` | yes |
+| `train/val/test.parquet`, `*_features.parquet` | yes |
+| `models/feature_pipeline/` | yes |
+| `trips_raw.meta.json`, `reports/validation/` | no — they embed a generation timestamp as provenance |
 
 ## Dataset
 

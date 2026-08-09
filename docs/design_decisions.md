@@ -156,3 +156,34 @@ corresponding requirement — and the retraining trigger in Week 4 can simply in
 **Why reports are `cache: false`.** Report directories are declared as uncached outputs
 so DVC tracks them as stage products while leaving the files in Git, where a reviewer
 can read them directly from the commit history.
+
+---
+
+### D9. Artefacts are deterministic JSON, not pickles
+
+**Decision.** The feature pipeline persists `speed_priors.json` (including zone
+centroids) and `feature_spec.json`. No estimator is pickled, and zone assignment is
+implemented as nearest-centroid rather than `KMeans.predict`.
+
+**How this was found.** Running `dvc repro --force` twice produced a different hash for
+`models/feature_pipeline` even though the fitted centroids were numerically identical.
+Refitting an estimator and re-pickling it does not yield stable bytes, so every rebuild
+dirtied `dvc.lock` while nothing had actually changed — which destroys the signal that
+the lock file is supposed to carry.
+
+**Why the fix is an improvement rather than a workaround.**
+
+1. `KMeans.predict` is exactly `argmin` of squared Euclidean distance to the centroids,
+   so nothing is lost. `tests/test_features.py` asserts the two agree exactly.
+2. The serving path no longer deserialises a pickle. Unpickling executes arbitrary code,
+   so a model artefact from an untrusted or compromised store is a remote-code-execution
+   vector; JSON removes that class of risk entirely.
+3. The serving container no longer needs the scikit-learn version that trained the
+   model, eliminating a whole category of version-skew failure on deploy.
+4. The artefact is human-readable and diffable in review.
+
+**Residual non-determinism, accepted.** `trips_raw.meta.json` and the validation report
+embed a wall-clock generation timestamp. That is provenance rather than data, and it is
+deliberately kept. The per-row `quarantined_at_utc` column was removed for the same
+reason: a timestamp on every quarantined row made a *data* artefact unreproducible for
+no analytical benefit, since the batch timestamp is already in the report.

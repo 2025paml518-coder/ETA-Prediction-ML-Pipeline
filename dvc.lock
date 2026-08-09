@@ -32,7 +32,7 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 50fdb709cc03065d486f87b83c5927e0
+      md5: de4dee031018cba03625e019ae0d2267
       size: 1279
     - path: data/raw/trips_raw.parquet
       hash: md5
@@ -51,8 +51,8 @@ stages:
       size: 3403
     - path: src/data/validate.py
       hash: md5
-      md5: 526e60c61f0a6f552033227d4608bdbc
-      size: 13102
+      md5: 3e0f3326492734f5863d5b3f50e7107c
+      size: 13179
     - path: src/utils/geo.py
       hash: md5
       md5: 1d1e559337fc2ff9a36c1e8227e08d33
@@ -107,11 +107,11 @@ stages:
       size: 11135216
     - path: data/quarantine/quarantined_trips.parquet
       hash: md5
-      md5: c5795320d9b4dab765ca6573d3e51f43
-      size: 415078
+      md5: 43f0012771bb14ced9fcd9f9d42f9eb9
+      size: 414375
     - path: reports/validation
       hash: md5
-      md5: 60d59b58f3621132dd723cac6a19c83b.dir
+      md5: 93502657d87ca1805ba2a9fb1bcc134c.dir
       size: 2372
       nfiles: 2
   split:
@@ -165,8 +165,8 @@ stages:
       size: 1922833
     - path: src/features/build_features.py
       hash: md5
-      md5: a3176d79906f367134e6de3b3c09d2b0
-      size: 15696
+      md5: b2bd92dfc7c632345f196db2146aa51c
+      size: 16199
     - path: src/features/make_features.py
       hash: md5
       md5: de561706b0d247a0e6f15b113df59585
@@ -195,21 +195,21 @@ stages:
     outs:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: 7ca824c0f668201350804059fef97c51
+      md5: b05bd938f418f1b2fd8812cf64afe75f
       size: 2930239
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: f107efc6ae9d774c3ddb5b8d3a39e944
+      md5: 9eb33489197882dc9542394f934ab4d5
       size: 12852306
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: 633a28139b9570cf8157cd6572871c56
+      md5: 1622d27ede822f6c7cecd3abd46e7a66
       size: 2930310
     - path: models/feature_pipeline
       hash: md5
-      md5: 6fcb10897170bc2908946aeb37c230eb.dir
-      size: 875452
-      nfiles: 3
+      md5: f71b125662e5971baefb130039767c16.dir
+      size: 59946
+      nfiles: 2
     - path: reports/features
       hash: md5
       md5: e6ee3e38639abb440888f8b097c7c8a3.dir
