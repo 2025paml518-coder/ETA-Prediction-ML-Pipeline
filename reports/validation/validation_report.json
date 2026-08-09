@@ -1,0 +1,41 @@
+{
+  "validated_at_utc": "2026-08-09T14:30:21+00:00",
+  "rows_in": 150450,
+  "rows_validated": 145549,
+  "rows_quarantined": 4901,
+  "quarantine_rate": 0.032576,
+  "max_bad_row_fraction": 0.15,
+  "quarantine_reasons": {
+    "MISSING_GPS": 1796,
+    "DURATION_OUT_OF_RANGE": 991,
+    "INVALID_TIMESTAMP_ORDER": 889,
+    "GPS_OUT_OF_BOUNDS": 593,
+    "DUPLICATE_TRIP_ID": 450,
+    "SPEED_OUT_OF_RANGE": 182
+  },
+  "repairs": {
+    "weather_imputed": 1154,
+    "passenger_count_imputed": 588
+  },
+  "target_summary": {
+    "count": 145549.0,
+    "mean": 24.4558,
+    "std": 16.6767,
+    "min": 1.2749,
+    "25%": 12.7379,
+    "50%": 19.925,
+    "75%": 31.5324,
+    "max": 162.8289
+  },
+  "schema_passed": true,
+  "planted_defects": {
+    "missing_gps": 1800,
+    "invalid_timestamp": 900,
+    "out_of_bounds_gps": 600,
+    "extreme_duration": 750,
+    "impossible_speed": 450,
+    "missing_weather": 1200,
+    "missing_passenger_count": 600,
+    "duplicate_trip_id": 450
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "partitions": {
+    "train": {
+      "rows": 101885,
+      "target_mean": 24.4487,
+      "target_std": 16.6796
+    },
+    "val": {
+      "rows": 21832,
+      "target_mean": 24.2275,
+      "target_std": 16.5205
+    },
+    "test": {
+      "rows": 21832,
+      "target_mean": 24.7172,
+      "target_std": 16.8148
+    }
+  },
+  "feature_spec": {
+    "version": "1.0.0",
+    "n_features": 44,
+    "feature_columns": [
+      "haversine_km",
+      "manhattan_km",
+      "bearing_sin",
+      "bearing_cos",
+      "pickup_latitude",
+      "pickup_longitude",
+      "dropoff_latitude",
+      "dropoff_longitude",
+      "hour_sin",
+      "hour_cos",
+      "dow_sin",
+      "dow_cos",
+      "month_sin",
+      "month_cos",
+      "is_weekend",
+      "is_rush_hour",
+      "is_night",
+      "is_holiday",
+      "traffic_index",
+      "temperature_c",
+      "precipitation_mm",
+      "wind_kph",
+      "weather_severity",
+      "weather_Clear",
+      "weather_Cloudy",
+      "weather_Rain",
+      "weather_Snow",
+      "weather_Fog",
+      "passenger_count",
+      "vendor_1",
+      "vendor_2",
+      "vendor_3",
+      "store_and_fwd",
+      "weather_imputed",
+      "passenger_count_imputed",
+      "pickup_zone_lat",
+      "pickup_zone_lon",
+      "dropoff_zone_lat",
+      "dropoff_zone_lon",
+      "same_zone",
+      "zone_hour_speed_prior",
+      "route_speed_prior",
+      "expected_duration_zone_hour",
+      "expected_duration_route"
+    ],
+    "required_input_columns": [
+      "pickup_datetime",
+      "pickup_latitude",
+      "pickup_longitude",
+      "dropoff_latitude",
+      "dropoff_longitude",
+      "passenger_count",
+      "vendor_id",
+      "store_and_fwd_flag",
+      "weather_condition",
+      "temperature_c",
+      "precipitation_mm",
+      "wind_kph",
+      "traffic_index"
+    ],
+    "target": "trip_duration_min",
+    "n_zone_clusters": 20,
+    "rush_hours_morning": [
+      7,
+      10
+    ],
+    "rush_hours_evening": [
+      16,
+      19
+    ],
+    "random_state": 42,
+    "fitted_on_rows": 101885,
+    "global_speed_kmph": 20.0247
+  }
+}
