@@ -1,0 +1,81 @@
+# Central configuration for every DVC pipeline stage.
+# Changing a value here invalidates the affected stage and triggers `dvc repro`.
+
+seed: 42
+
+paths:
+  raw: data/raw
+  interim: data/interim
+  processed: data/processed
+  quarantine: data/quarantine
+  drift: data/drift
+  models: models
+  reports: reports
+
+# --------------------------------------------------------------------------
+# Stage 1: synthetic trip generation
+# --------------------------------------------------------------------------
+generate:
+  n_trips: 150000
+  start_date: "2024-01-01"
+  end_date: "2024-12-31"
+  scenario: baseline
+  output_file: trips_raw.parquet
+
+  # Fraction of rows deliberately corrupted so the validation stage has real
+  # defects to catch (missing GPS pings / invalid timestamps are named in the brief).
+  defect_rates:
+    missing_gps: 0.012
+    invalid_timestamp: 0.006
+    out_of_bounds_gps: 0.004
+    duplicate_trip_id: 0.003
+    extreme_duration: 0.005
+    missing_weather: 0.008
+    missing_passenger_count: 0.004
+    impossible_speed: 0.003
+
+# --------------------------------------------------------------------------
+# Stage 2: schema + statistical validation
+# --------------------------------------------------------------------------
+validate:
+  # Abort the pipeline if more than this fraction of rows fail validation:
+  # a spike in bad rows means the upstream source changed, not that the data is noisy.
+  max_bad_row_fraction: 0.15
+  min_rows: 10000
+  bounds:
+    latitude: [40.55, 40.95]
+    longitude: [-74.10, -73.70]
+    trip_duration_min: [1.0, 300.0]
+    avg_speed_kmph: [1.0, 120.0]
+    passenger_count: [1, 6]
+    temperature_c: [-25.0, 45.0]
+    precipitation_mm: [0.0, 80.0]
+    wind_kph: [0.0, 120.0]
+    traffic_index: [0.0, 1.0]
+  allowed_weather:
+    - Clear
+    - Cloudy
+    - Rain
+    - Snow
+    - Fog
+  allowed_vendors: [1, 2, 3]
+
+# --------------------------------------------------------------------------
+# Stage 3: feature engineering
+# --------------------------------------------------------------------------
+features:
+  n_zone_clusters: 20
+  rush_hours_morning: [7, 10]
+  rush_hours_evening: [16, 19]
+  target: trip_duration_min
+  output_file: features.parquet
+
+# --------------------------------------------------------------------------
+# Stage 4: train / validation / test split
+# --------------------------------------------------------------------------
+split:
+  # Temporal split, not random: a random split would leak future traffic
+  # conditions into training and inflate offline metrics.
+  strategy: temporal
+  val_fraction: 0.15
+  test_fraction: 0.15
