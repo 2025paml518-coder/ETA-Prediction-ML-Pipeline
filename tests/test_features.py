@@ -113,3 +113,56 @@ def test_saved_artifact_is_byte_stable_across_refits(params, clean_trips, tmp_pa
 
     for name in ("speed_priors.json", "feature_spec.json"):
         assert (first / name).read_bytes() == (second / name).read_bytes(), name
+
+
+def test_imputation_values_come_from_training_only(params, defective_trips):
+    """M2 2.6.4: fill values must be learned from the training split, not the batch."""
+    from src.data.split import temporal_split
+    from src.data.validate import validate_frame
+
+    validated, _, _ = validate_frame(defective_trips[0], params)
+    parts = temporal_split(validated, 0.15, 0.15, "pickup_datetime")
+
+    pipeline = FeaturePipeline.from_params(params).fit(parts["train"])
+    expected = float(parts["train"]["passenger_count"].median())
+
+    assert pipeline.imputation["passenger_count"]["global"] == expected
+    assert pipeline.imputation["weather_condition"]["strategy"] == "month_mode"
+    assert pipeline.imputation["numeric"]["strategy"] == "month_median"
+
+    # Refitting on the test partition would produce different values, which is exactly
+    # what must never happen at serving time.
+    other = FeaturePipeline.from_params(params).fit(parts["test"])
+    assert other.imputation["numeric"]["global"] != pipeline.imputation["numeric"]["global"]
+
+
+def test_imputation_survives_a_save_load_round_trip(params, defective_trips, tmp_path):
+    from src.data.validate import validate_frame
+
+    validated, _, _ = validate_frame(defective_trips[0], params)
+    pipeline = FeaturePipeline.from_params(params).fit(validated)
+    pipeline.save(tmp_path / "fp")
+    reloaded = FeaturePipeline.load(tmp_path / "fp")
+
+    assert reloaded.imputation == pipeline.imputation
+
+    gapped = validated[validated["weather_condition"].isna()].head(20)
+    assert len(gapped) > 0
+    features = reloaded.transform(gapped)
+    assert features["weather_imputed"].eq(1.0).all()
+    assert features.notna().all().all()
+
+
+def test_missing_covariates_are_flagged_not_dropped(params, defective_trips):
+    from src.data.validate import validate_frame
+
+    validated, _, _ = validate_frame(defective_trips[0], params)
+    pipeline = FeaturePipeline.from_params(params).fit(validated)
+    features = pipeline.transform(validated)
+
+    assert len(features) == len(validated)
+    assert features["weather_imputed"].sum() == validated["weather_condition"].isna().sum()
+    assert (
+        features["passenger_count_imputed"].sum()
+        == validated["passenger_count"].isna().sum()
+    )

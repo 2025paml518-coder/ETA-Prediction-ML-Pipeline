@@ -8,7 +8,10 @@ persisted next to the model and reloaded by the service, so an inference request
 travels through byte-identical code to a training row.
 
 Fitted state is learned from the **training partition only**; the split stage runs
-first precisely so that this is possible.
+first precisely so that this is possible. That covers the three non-negotiable
+requirements M2 2.6.4 places on imputation: the strategy is fixed before training, the
+fill values come from training data alone, and they are persisted and reused at serving
+rather than recomputed from production data.
 
 Zone identity is deliberately expressed as centroid coordinates and learned speed
 priors rather than raw cluster ids: the resulting matrix is fully numeric and
@@ -37,6 +40,8 @@ WEATHER_SEVERITY = {"Clear": 0.0, "Cloudy": 1.0, "Fog": 2.0, "Rain": 3.0, "Snow"
 VENDOR_CATEGORIES = (1, 2, 3)
 
 TARGET = "trip_duration_min"
+
+IMPUTABLE_NUMERIC = ("temperature_c", "precipitation_mm", "wind_kph")
 
 # Columns a caller must provide. Note the absence of dropoff_datetime: it is the
 # target and is unavailable at inference time, so no feature may depend on it.
@@ -128,6 +133,7 @@ class FeaturePipeline:
     zone_hour_speed: pd.DataFrame | None = field(default=None, repr=False)
     route_speed: pd.DataFrame | None = field(default=None, repr=False)
     zone_speed: pd.DataFrame | None = field(default=None, repr=False)
+    imputation: dict = field(default_factory=dict, repr=False)
     global_speed: float = 20.0
     fitted_on_rows: int = 0
 
@@ -144,10 +150,13 @@ class FeaturePipeline:
         )
 
     def fit(self, frame: pd.DataFrame) -> FeaturePipeline:
-        """Learn zone clusters and speed priors from the training partition."""
+        """Learn imputation values, zone clusters and speed priors from training data."""
         self._require_columns(frame)
         if TARGET not in frame.columns:
             raise ValueError(f"fit() needs the target column {TARGET!r}")
+
+        self._fit_imputation(frame)
+        frame = self._apply_imputation(frame)
 
         coords = np.vstack(
             [
@@ -187,12 +196,83 @@ class FeaturePipeline:
         self.fitted_on_rows = int(len(frame))
         return self
 
+    # ------------------------------------------------------------- imputation
+    def _fit_imputation(self, frame: pd.DataFrame) -> None:
+        """Learn fill values from the training partition (M2 2.6.4)."""
+        month = pd.to_datetime(frame["pickup_datetime"]).dt.month
+
+        observed_weather = frame["weather_condition"].dropna()
+        global_weather = str(observed_weather.mode().iat[0]) if not observed_weather.empty else "Clear"
+        weather_by_month = (
+            frame.dropna(subset=["weather_condition"])
+            .groupby(month[frame["weather_condition"].notna()])["weather_condition"]
+            .agg(lambda s: str(s.mode().iat[0]))
+            .to_dict()
+        )
+
+        numeric_by_month: dict[str, dict[str, float]] = {}
+        numeric_global: dict[str, float] = {}
+        for column in IMPUTABLE_NUMERIC:
+            numeric_global[column] = float(frame[column].median())
+            numeric_by_month[column] = {
+                str(int(k)): float(v)
+                for k, v in frame.groupby(month)[column].median().dropna().to_dict().items()
+            }
+
+        self.imputation = {
+            "weather_condition": {
+                "strategy": "month_mode",
+                "by_month": {str(int(k)): v for k, v in weather_by_month.items()},
+                "global": global_weather,
+            },
+            "numeric": {
+                "strategy": "month_median",
+                "by_month": numeric_by_month,
+                "global": numeric_global,
+            },
+            "passenger_count": {
+                "strategy": "median",
+                "global": float(frame["passenger_count"].median()),
+            },
+        }
+
+    def _apply_imputation(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Fill repairable gaps using the persisted training-time values."""
+        if not self.imputation:
+            raise FeaturePipelineNotFitted("Imputation values have not been fitted")
+
+        frame = frame.copy()
+        month = pd.to_datetime(frame["pickup_datetime"]).dt.month.astype(str)
+
+        weather_cfg = self.imputation["weather_condition"]
+        frame["weather_condition"] = frame["weather_condition"].fillna(
+            month.map(weather_cfg["by_month"]).fillna(weather_cfg["global"])
+        )
+
+        numeric_cfg = self.imputation["numeric"]
+        for column in IMPUTABLE_NUMERIC:
+            fallback = numeric_cfg["global"][column]
+            frame[column] = frame[column].fillna(
+                month.map(numeric_cfg["by_month"][column]).fillna(fallback)
+            )
+
+        frame["passenger_count"] = frame["passenger_count"].fillna(
+            self.imputation["passenger_count"]["global"]
+        )
+        return frame
+
     # ------------------------------------------------------------- transform
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Build the model-ready feature matrix in the canonical column order."""
         if self.zone_centroids is None:
             raise FeaturePipelineNotFitted("Call fit() or load() before transform()")
         self._require_columns(frame)
+
+        # Missingness is recorded before it is filled: it is frequently informative,
+        # and the indicator is what makes "indicator + fill" safe (M2 Table 2.3).
+        weather_missing = frame["weather_condition"].isna().to_numpy().astype(float)
+        passenger_missing = frame["passenger_count"].isna().to_numpy().astype(float)
+        frame = self._apply_imputation(frame)
 
         out = pd.DataFrame(index=frame.index)
         pickup_dt = pd.to_datetime(frame["pickup_datetime"])
@@ -230,7 +310,7 @@ class FeaturePipeline:
         out["is_night"] = ((hour >= 22) | (hour < 5)).astype(float)
         out["is_holiday"] = is_holiday(pickup_dt).astype(float)
 
-        weather = frame["weather_condition"].astype("object").fillna("Clear")
+        weather = frame["weather_condition"].astype("object")
         out["traffic_index"] = frame["traffic_index"].to_numpy(dtype=float)
         out["temperature_c"] = frame["temperature_c"].to_numpy(dtype=float)
         out["precipitation_mm"] = frame["precipitation_mm"].to_numpy(dtype=float)
@@ -246,8 +326,8 @@ class FeaturePipeline:
         out["store_and_fwd"] = (
             frame["store_and_fwd_flag"].astype("object").fillna("N").eq("Y").to_numpy().astype(float)
         )
-        out["weather_imputed"] = self._optional_flag(frame, "weather_imputed")
-        out["passenger_count_imputed"] = self._optional_flag(frame, "passenger_count_imputed")
+        out["weather_imputed"] = weather_missing
+        out["passenger_count_imputed"] = passenger_missing
 
         pickup_zone = self._assign_zone(frame, "pickup")
         dropoff_zone = self._assign_zone(frame, "dropoff")
@@ -288,12 +368,6 @@ class FeaturePipeline:
             raise ValueError(f"Input is missing required columns: {missing}")
 
     @staticmethod
-    def _optional_flag(frame: pd.DataFrame, column: str) -> np.ndarray:
-        if column not in frame.columns:
-            return np.zeros(len(frame), dtype=float)
-        return frame[column].fillna(False).to_numpy().astype(float)
-
-    @staticmethod
     def _observed_speed(frame: pd.DataFrame) -> np.ndarray:
         if "avg_speed_kmph" in frame.columns:
             return frame["avg_speed_kmph"].to_numpy(dtype=float)
@@ -331,6 +405,7 @@ class FeaturePipeline:
         priors = {
             "global_speed": self.global_speed,
             "zone_centroids": self.zone_centroids.tolist(),
+            "imputation": self.imputation,
             "zone_hour_speed": self.zone_hour_speed.to_dict("records"),
             "route_speed": self.route_speed.to_dict("records"),
             "zone_speed": self.zone_speed.to_dict("records"),
@@ -358,6 +433,7 @@ class FeaturePipeline:
             random_state=spec["random_state"],
         )
         pipeline.zone_centroids = np.asarray(priors["zone_centroids"], dtype=np.float64)
+        pipeline.imputation = priors["imputation"]
         pipeline.global_speed = priors["global_speed"]
         pipeline.zone_hour_speed = pd.DataFrame(priors["zone_hour_speed"])
         pipeline.route_speed = pd.DataFrame(priors["route_speed"])
@@ -378,4 +454,7 @@ class FeaturePipeline:
             "random_state": self.random_state,
             "fitted_on_rows": self.fitted_on_rows,
             "global_speed_kmph": round(self.global_speed, 4),
+            "imputation_strategies": {
+                key: value.get("strategy") for key, value in self.imputation.items()
+            },
         }

@@ -1,9 +1,15 @@
-"""Pandera contract for the *validated* trip table.
+"""Pandera contract for the *validated* trip table (M2 Level 1).
 
 This schema describes the guarantee the ingestion stage makes to everything
 downstream. It is asserted at the end of validation and re-asserted by the unit
 tests, so a silent change in the upstream feed fails loudly rather than
 propagating into features and, eventually, into the served model.
+
+Fields that are *required* for a row to be usable are non-nullable. Fields that are
+merely *imputable* stay nullable on purpose: filling them here would mean computing
+fill values from the whole batch, whereas M2 2.6.4 requires them to be learned from
+the training partition alone and persisted for serving. That happens in the feature
+pipeline, downstream of the split.
 """
 
 from __future__ import annotations
@@ -48,7 +54,7 @@ def build_validated_schema(params: dict | None = None) -> pa.DataFrameSchema:
             "pickup_datetime": pa.Column("datetime64[ns]", nullable=False),
             "dropoff_datetime": pa.Column("datetime64[ns]", nullable=False),
             "passenger_count": pa.Column(
-                int, between("passenger_count"), nullable=False, coerce=True
+                float, between("passenger_count"), nullable=True
             ),
             "pickup_latitude": pa.Column(float, between("latitude"), nullable=False),
             "pickup_longitude": pa.Column(float, between("longitude"), nullable=False),
@@ -56,18 +62,14 @@ def build_validated_schema(params: dict | None = None) -> pa.DataFrameSchema:
             "dropoff_longitude": pa.Column(float, between("longitude"), nullable=False),
             "store_and_fwd_flag": pa.Column(str, pa.Check.isin(["Y", "N"]), nullable=False),
             "weather_condition": pa.Column(
-                str, pa.Check.isin(cfg["allowed_weather"]), nullable=False
+                str, pa.Check.isin(cfg["allowed_weather"]), nullable=True
             ),
-            "temperature_c": pa.Column(float, between("temperature_c"), nullable=False),
-            "precipitation_mm": pa.Column(float, between("precipitation_mm"), nullable=False),
-            "wind_kph": pa.Column(float, between("wind_kph"), nullable=False),
+            "temperature_c": pa.Column(float, between("temperature_c"), nullable=True),
+            "precipitation_mm": pa.Column(float, between("precipitation_mm"), nullable=True),
+            "wind_kph": pa.Column(float, between("wind_kph"), nullable=True),
             "traffic_index": pa.Column(float, between("traffic_index"), nullable=False),
-            "trip_duration_min": pa.Column(
-                float, between("trip_duration_min"), nullable=False
-            ),
+            "trip_duration_min": pa.Column(float, between("trip_duration_min"), nullable=False),
             "avg_speed_kmph": pa.Column(float, between("avg_speed_kmph"), nullable=False),
-            "weather_imputed": pa.Column(bool, nullable=False),
-            "passenger_count_imputed": pa.Column(bool, nullable=False),
         },
         checks=[
             pa.Check(

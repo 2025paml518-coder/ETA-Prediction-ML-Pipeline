@@ -1,4 +1,4 @@
-"""Validation stage behaviour."""
+"""Four-level validation behaviour (M2 section 2.5)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def test_clean_batch_passes_without_quarantine(params, clean_trips):
     validated, quarantined, report = validate_frame(clean_trips, params)
     assert len(quarantined) == 0
     assert report["rows_validated"] == len(clean_trips)
-    assert report["schema_passed"] is True
+    assert report["levels"]["level_1_schema"] == "passed"
 
 
 def test_planted_defects_are_quarantined(params, defective_trips):
@@ -29,9 +29,9 @@ def test_planted_defects_are_quarantined(params, defective_trips):
         "dropoff_latitude",
         "dropoff_longitude",
     ]
-    # Every planted fatal defect must be caught; a row that carries several defects
-    # is reported under a single reason code, so counts are bounded, not equal.
-    assert frame[coord_cols].isna().any(axis=1).sum() == planted["missing_gps"]
+    # Defects can land on the same row - an out-of-bounds coordinate may overwrite a
+    # nulled one - so planted counts bound the observed counts rather than equal them.
+    assert frame[coord_cols].isna().any(axis=1).sum() <= planted["missing_gps"]
     assert validated[coord_cols].notna().all().all()
     assert not validated["trip_id"].duplicated().any()
 
@@ -41,11 +41,42 @@ def test_planted_defects_are_quarantined(params, defective_trips):
     assert reasons["MISSING_GPS"] <= planted["missing_gps"]
     assert reasons["INVALID_TIMESTAMP_ORDER"] > 0
     assert reasons["GPS_OUT_OF_BOUNDS"] > 0
-
-    # Repairable defects are imputed, never silently dropped.
-    assert report["repairs"]["weather_imputed"] > 0
-    assert report["repairs"]["passenger_count_imputed"] > 0
     assert len(validated) + len(quarantined) == len(frame)
+
+
+def test_level_4_business_rule_catches_cross_field_contradiction(params, defective_trips):
+    """Rain measured under a clear sky: every value is legal, only the pair is not."""
+    frame, planted = defective_trips
+    _, quarantined, report = validate_frame(frame, params)
+
+    caught = report["quarantine_reasons"].get("BR_PRECIPITATION_WITHOUT_WET_WEATHER", 0)
+    assert caught > 0
+    assert caught <= planted["inconsistent_weather"]
+    assert report["levels"]["level_4_business"] >= caught
+
+    flagged = quarantined.query("quarantine_reason == 'BR_PRECIPITATION_WITHOUT_WET_WEATHER'")
+    assert (flagged["precipitation_mm"] > 0).all()
+    assert flagged["weather_condition"].eq("Clear").all()
+
+
+def test_partial_weather_record_is_rejected(params, clean_trips):
+    """A half-populated weather join is an inconsistent feed, not a missing value."""
+    frame = clean_trips.copy()
+    frame.loc[frame.index[:50], "wind_kph"] = np.nan
+
+    _, _, report = validate_frame(frame, params)
+    assert report["quarantine_reasons"].get("BR_PARTIAL_WEATHER_RECORD", 0) == 50
+
+
+def test_repairable_nulls_survive_validation(params, defective_trips):
+    """Missing weather and passenger count are carried forward, not dropped."""
+    frame, _ = defective_trips
+    validated, _, report = validate_frame(frame, params)
+
+    assert report["nulls_left_for_imputation"]["weather_condition"] > 0
+    assert report["nulls_left_for_imputation"]["passenger_count"] > 0
+    assert validated["weather_condition"].isna().any()
+    assert validated["passenger_count"].isna().any()
 
 
 def test_validated_output_satisfies_schema_contract(params, defective_trips):
@@ -97,3 +128,23 @@ def test_derived_duration_matches_timestamps(params, clean_trips):
     pd.testing.assert_series_equal(
         validated["trip_duration_min"], expected, check_names=False, rtol=1e-9
     )
+
+
+def test_six_quality_dimensions_are_reported(params, defective_trips):
+    frame, _ = defective_trips
+    _, _, report = validate_frame(frame, params)
+    dimensions = report["quality_dimensions"]
+
+    assert set(dimensions) == {
+        "completeness",
+        "accuracy",
+        "consistency",
+        "timeliness",
+        "validity",
+        "uniqueness",
+    }
+    assert 0.0 <= dimensions["completeness"]["fully_populated_row_rate"] <= 1.0
+    assert dimensions["uniqueness"]["duplicate_rows"] > 0
+    assert dimensions["validity"]["invalid_rows"] > 0
+    assert dimensions["timeliness"]["measurable"] is True
+    assert dimensions["accuracy"]["directly_measurable"] is False
