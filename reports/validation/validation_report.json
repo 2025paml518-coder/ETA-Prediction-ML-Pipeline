@@ -1,33 +1,103 @@
 {
-  "validated_at_utc": "2026-08-09T14:44:18+00:00",
+  "validated_at_utc": "2026-08-09T15:15:31+00:00",
   "rows_in": 150450,
-  "rows_validated": 145549,
-  "rows_quarantined": 4901,
-  "quarantine_rate": 0.032576,
+  "rows_validated": 144959,
+  "rows_quarantined": 5491,
+  "quarantine_rate": 0.036497,
   "max_bad_row_fraction": 0.15,
   "quarantine_reasons": {
     "MISSING_GPS": 1796,
     "DURATION_OUT_OF_RANGE": 991,
     "INVALID_TIMESTAMP_ORDER": 889,
     "GPS_OUT_OF_BOUNDS": 593,
+    "BR_PRECIPITATION_WITHOUT_WET_WEATHER": 590,
     "DUPLICATE_TRIP_ID": 450,
     "SPEED_OUT_OF_RANGE": 182
   },
-  "repairs": {
-    "weather_imputed": 1154,
-    "passenger_count_imputed": 588
+  "levels": {
+    "level_1_schema": "passed",
+    "level_2_range": 4901,
+    "level_3_statistical": "skipped (no baseline supplied)",
+    "level_4_business": 590
+  },
+  "nulls_left_for_imputation": {
+    "weather_condition": 1150,
+    "temperature_c": 1150,
+    "precipitation_mm": 1150,
+    "wind_kph": 1150,
+    "passenger_count": 586
   },
   "target_summary": {
-    "count": 145549.0,
-    "mean": 24.4558,
-    "std": 16.6767,
+    "count": 144959.0,
+    "mean": 24.4548,
+    "std": 16.6792,
     "min": 1.2749,
-    "25%": 12.7379,
-    "50%": 19.925,
-    "75%": 31.5324,
+    "25%": 12.7376,
+    "50%": 19.9224,
+    "75%": 31.5304,
     "max": 162.8289
   },
-  "schema_passed": true,
+  "quality_dimensions": {
+    "completeness": {
+      "per_column_non_null_rate": {
+        "trip_id": 1.0,
+        "vendor_id": 1.0,
+        "pickup_datetime": 1.0,
+        "dropoff_datetime": 1.0,
+        "pickup_latitude": 0.994031,
+        "pickup_longitude": 0.994031,
+        "dropoff_latitude": 0.993998,
+        "dropoff_longitude": 0.993998,
+        "traffic_index": 1.0,
+        "passenger_count": 0.995992,
+        "weather_condition": 0.992037,
+        "temperature_c": 0.992011,
+        "precipitation_mm": 0.992037,
+        "wind_kph": 0.992011
+      },
+      "required_field_completeness": 0.99734,
+      "fully_populated_row_rate": 0.988029
+    },
+    "accuracy": {
+      "directly_measurable": false,
+      "proxy": "implied average speed plausibility",
+      "implausible_speed_rate": 0.012635,
+      "median_implied_speed_kmph": 20.086,
+      "note": "True label accuracy requires a sampling audit against GPS traces."
+    },
+    "consistency": {
+      "inconsistent_rows": 1479,
+      "consistency_rate": 0.990169,
+      "violations_by_rule": {
+        "INVALID_TIMESTAMP_ORDER": 889,
+        "BR_PRECIPITATION_WITHOUT_WET_WEATHER": 590
+      }
+    },
+    "timeliness": {
+      "measurable": true,
+      "newest_event": "2024-12-31T23:53:35",
+      "oldest_event": "2024-01-01T00:09:02",
+      "span_days": 365.989,
+      "median_age_days": 182.539,
+      "share_within_30_days_of_newest": 0.081987
+    },
+    "validity": {
+      "invalid_rows": 1766,
+      "validity_rate": 0.988262,
+      "violations_by_rule": {
+        "DURATION_OUT_OF_RANGE": 991,
+        "GPS_OUT_OF_BOUNDS": 593,
+        "SPEED_OUT_OF_RANGE": 182
+      }
+    },
+    "uniqueness": {
+      "key": "trip_id",
+      "rows": 150450,
+      "distinct_keys": 150000,
+      "duplicate_rows": 450,
+      "uniqueness_ratio": 0.997009
+    }
+  },
   "planted_defects": {
     "missing_gps": 1800,
     "invalid_timestamp": 900,
@@ -36,6 +106,7 @@
     "impossible_speed": 450,
     "missing_weather": 1200,
     "missing_passenger_count": 600,
+    "inconsistent_weather": 600,
     "duplicate_trip_id": 450
   }
 }

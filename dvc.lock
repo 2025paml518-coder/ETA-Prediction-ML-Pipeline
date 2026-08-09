@@ -5,8 +5,8 @@ stages:
     deps:
     - path: src/data/generate_synthetic.py
       hash: md5
-      md5: 72f2d0f5344fce00431d622a608411fd
-      size: 20609
+      md5: 2c2579faeab0b9f6ff8c447634023f1a
+      size: 20997
     - path: src/utils/geo.py
       hash: md5
       md5: 1d1e559337fc2ff9a36c1e8227e08d33
@@ -28,35 +28,48 @@ stages:
             missing_weather: 0.008
             missing_passenger_count: 0.004
             impossible_speed: 0.003
+            inconsistent_weather: 0.004
         seed: 42
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: de4dee031018cba03625e019ae0d2267
-      size: 1279
+      md5: 7679157e8120fd800fbd85a7fcdb7bbe
+      size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 81549803334a3e7191a3512f97e49b4d
-      size: 8437614
+      md5: 720419e78f6f0ad467e894e6164e32a2
+      size: 8444280
   validate:
     cmd: python -m src.data.validate
     deps:
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 81549803334a3e7191a3512f97e49b4d
-      size: 8437614
+      md5: 720419e78f6f0ad467e894e6164e32a2
+      size: 8444280
+    - path: src/data/quality.py
+      hash: md5
+      md5: f9bc127197299af06efdd5314f4baa86
+      size: 8963
     - path: src/data/schema.py
       hash: md5
-      md5: 60ed9b4520020f1c2240202b42cdd74d
-      size: 3403
+      md5: f319b9ff3fef273516501130515d2c01
+      size: 3608
+    - path: src/data/statistical_validation.py
+      hash: md5
+      md5: 252feb7984d005a9b61263f69e33eb58
+      size: 10251
     - path: src/data/validate.py
       hash: md5
-      md5: 3e0f3326492734f5863d5b3f50e7107c
-      size: 13179
+      md5: dbaa58c7f2f87de0beb72dc76d9db36a
+      size: 16391
     - path: src/utils/geo.py
       hash: md5
       md5: 1d1e559337fc2ff9a36c1e8227e08d33
       size: 1775
+    - path: src/utils/io.py
+      hash: md5
+      md5: 30b55d7f866b6bb8f9b3ad74633f47fc
+      size: 1311
     params:
       params.yaml:
         validate:
@@ -100,31 +113,52 @@ stages:
           - 1
           - 2
           - 3
+          business_rules:
+            wet_weather_conditions:
+            - Rain
+            - Snow
+            snow_max_temperature_c: 5.0
+            stationary_max_km: 0.05
+            stationary_max_minutes: 60.0
+          statistical:
+            ks_pvalue_threshold: 0.01
+            ks_statistic_warn: 0.05
+            chi2_pvalue_threshold: 0.01
+            mean_shift_sd_warn: 1.0
+            mean_shift_sd_fail: 2.0
+            null_rate_increase_fail: 0.1
+            category_shift_warn: 0.05
+            category_shift_fail: 0.15
+            action_on_failure: fail
     outs:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: 88eb81a81c74b6589749f0b43d4805c2
-      size: 11135216
+      md5: cfe4a5aeefca9a77227ebe69801cccd9
+      size: 11094843
     - path: data/quarantine/quarantined_trips.parquet
       hash: md5
-      md5: 43f0012771bb14ced9fcd9f9d42f9eb9
-      size: 414375
+      md5: 59780a55ecd039b74e7f552c95858719
+      size: 479796
     - path: reports/validation
       hash: md5
-      md5: 93502657d87ca1805ba2a9fb1bcc134c.dir
-      size: 2372
-      nfiles: 2
+      md5: f53ac506d5ec042ab287dfa4e14fcb5f.dir
+      size: 6888
+      nfiles: 3
   split:
     cmd: python -m src.data.split
     deps:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: 88eb81a81c74b6589749f0b43d4805c2
-      size: 11135216
+      md5: cfe4a5aeefca9a77227ebe69801cccd9
+      size: 11094843
     - path: src/data/split.py
       hash: md5
-      md5: 27089d125e3a9026a125c9b8366d0a7a
-      size: 3231
+      md5: ab09aee477704611d7f1b6081b38099d
+      size: 3248
+    - path: src/utils/io.py
+      hash: md5
+      md5: 30b55d7f866b6bb8f9b3ad74633f47fc
+      size: 1311
     params:
       params.yaml:
         split:
@@ -134,43 +168,43 @@ stages:
     outs:
     - path: data/interim/split_manifest.json
       hash: md5
-      md5: dd74962b78cc3b634a17c5165ba35ec0
+      md5: 559283ce95a14ed5014511aaf8e90490
       size: 455
     - path: data/interim/test.parquet
       hash: md5
-      md5: 822f1113b109653ec2a374c64a3ee746
-      size: 1922638
+      md5: 5e8f76f8a9291cea45726827c7ff0945
+      size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: ce53e5957999b6c66a405c269f1bd16d
-      size: 8180501
+      md5: 5835a68797e7655936809c6eb4b437f0
+      size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: a5ee45a608d78a2aef05fb62d11d7542
-      size: 1922833
+      md5: 8535cb962883f8cc4c26e8a76d034540
+      size: 1911459
   features:
     cmd: python -m src.features.make_features
     deps:
     - path: data/interim/test.parquet
       hash: md5
-      md5: 822f1113b109653ec2a374c64a3ee746
-      size: 1922638
+      md5: 5e8f76f8a9291cea45726827c7ff0945
+      size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: ce53e5957999b6c66a405c269f1bd16d
-      size: 8180501
+      md5: 5835a68797e7655936809c6eb4b437f0
+      size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: a5ee45a608d78a2aef05fb62d11d7542
-      size: 1922833
+      md5: 8535cb962883f8cc4c26e8a76d034540
+      size: 1911459
     - path: src/features/build_features.py
       hash: md5
-      md5: b2bd92dfc7c632345f196db2146aa51c
-      size: 16199
+      md5: 86530e7e86999aefa4324d0d44fd9954
+      size: 19757
     - path: src/features/make_features.py
       hash: md5
-      md5: de561706b0d247a0e6f15b113df59585
-      size: 2617
+      md5: 0a5d515477acd9c964a2ee454d8b7187
+      size: 2634
     - path: src/utils/calendar_nyc.py
       hash: md5
       md5: e7e41662f919d341eed6e1aa7f9165d3
@@ -179,6 +213,10 @@ stages:
       hash: md5
       md5: 1d1e559337fc2ff9a36c1e8227e08d33
       size: 1775
+    - path: src/utils/io.py
+      hash: md5
+      md5: 30b55d7f866b6bb8f9b3ad74633f47fc
+      size: 1311
     params:
       params.yaml:
         features:
@@ -191,27 +229,62 @@ stages:
           - 19
           target: trip_duration_min
           output_file: features.parquet
+          imputation:
+            weather_strategy: month_mode
+            numeric_strategy: month_median
         seed: 42
     outs:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: b05bd938f418f1b2fd8812cf64afe75f
-      size: 2930239
+      md5: 35c48aa338b45930acba97c36969cac6
+      size: 2919080
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: 9eb33489197882dc9542394f934ab4d5
-      size: 12852306
+      md5: 7c0a7536944ea967ffec77f7fa34717b
+      size: 12805214
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: 1622d27ede822f6c7cecd3abd46e7a66
-      size: 2930310
+      md5: 5fc9baca198e6782a9e94a90974db8b9
+      size: 2916993
     - path: models/feature_pipeline
       hash: md5
-      md5: f71b125662e5971baefb130039767c16.dir
-      size: 59946
+      md5: 572826fa2fd55199d3a253a6d3f8866f.dir
+      size: 60836
       nfiles: 2
     - path: reports/features
       hash: md5
-      md5: e6ee3e38639abb440888f8b097c7c8a3.dir
-      size: 2150
+      md5: d495bc270aea28c4d9e44ba567697224.dir
+      size: 2300
+      nfiles: 1
+  profile:
+    cmd: python -m src.data.make_profile
+    deps:
+    - path: data/interim/train.parquet
+      hash: md5
+      md5: 5835a68797e7655936809c6eb4b437f0
+      size: 8147307
+    - path: src/data/make_profile.py
+      hash: md5
+      md5: 64fe1e0d9b404b2ef029ef9f46af9538
+      size: 3124
+    - path: src/data/statistical_validation.py
+      hash: md5
+      md5: 252feb7984d005a9b61263f69e33eb58
+      size: 10251
+    params:
+      params.yaml:
+        profile:
+          reference_sample_size: 2000
+          output_file: baseline_profile.json
+        seed: 42
+    outs:
+    - path: models/data_profile
+      hash: md5
+      md5: afe67acb2e571588356c1bc5c3366f68.dir
+      size: 195936
+      nfiles: 1
+    - path: reports/profile
+      hash: md5
+      md5: dbcefff63bd557b1b22ba4974f246ad5.dir
+      size: 1596
       nfiles: 1

@@ -1,19 +1,19 @@
 {
   "partitions": {
     "train": {
-      "rows": 101885,
-      "target_mean": 24.4487,
-      "target_std": 16.6796
+      "rows": 101471,
+      "target_mean": 24.4486,
+      "target_std": 16.6827
     },
     "val": {
-      "rows": 21832,
-      "target_mean": 24.2275,
-      "target_std": 16.5205
+      "rows": 21744,
+      "target_mean": 24.2327,
+      "target_std": 16.5254
     },
     "test": {
-      "rows": 21832,
-      "target_mean": 24.7172,
-      "target_std": 16.8148
+      "rows": 21744,
+      "target_mean": 24.706,
+      "target_std": 16.8128
     }
   },
   "feature_spec": {
@@ -91,7 +91,12 @@
       19
     ],
     "random_state": 42,
-    "fitted_on_rows": 101885,
-    "global_speed_kmph": 20.0247
+    "fitted_on_rows": 101471,
+    "global_speed_kmph": 20.0211,
+    "imputation_strategies": {
+      "weather_condition": "month_mode",
+      "numeric": "month_median",
+      "passenger_count": "median"
+    }
   }
 }

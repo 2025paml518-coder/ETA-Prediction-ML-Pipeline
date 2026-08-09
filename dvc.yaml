@@ -20,7 +20,10 @@ stages:
     deps:
       - src/data/validate.py
       - src/data/schema.py
+      - src/data/quality.py
+      - src/data/statistical_validation.py
       - src/utils/geo.py
+      - src/utils/io.py
       - data/raw/trips_raw.parquet
     params:
       - validate
@@ -36,6 +39,7 @@ stages:
     cmd: python -m src.data.split
     deps:
       - src/data/split.py
+      - src/utils/io.py
       - data/interim/trips_validated.parquet
     params:
       - split
@@ -52,6 +56,7 @@ stages:
       - src/features/build_features.py
       - src/utils/geo.py
       - src/utils/calendar_nyc.py
+      - src/utils/io.py
       - data/interim/train.parquet
       - data/interim/val.parquet
       - data/interim/test.parquet
@@ -64,4 +69,20 @@ stages:
       - data/processed/test_features.parquet
       - models/feature_pipeline
       - reports/features:
+          cache: false
+
+  # Level 3 baseline for every batch ingested after this one. Deliberately fitted on
+  # the training partition only.
+  profile:
+    cmd: python -m src.data.make_profile
+    deps:
+      - src/data/make_profile.py
+      - src/data/statistical_validation.py
+      - data/interim/train.parquet
+    params:
+      - seed
+      - profile
+    outs:
+      - models/data_profile
+      - reports/profile:
           cache: false

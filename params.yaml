@@ -33,6 +33,9 @@ generate:
     missing_weather: 0.008
     missing_passenger_count: 0.004
     impossible_speed: 0.003
+    # Cross-field contradiction: only a Level 4 business rule can catch it, since
+    # every individual value stays within its own legal range.
+    inconsistent_weather: 0.004
 
 # --------------------------------------------------------------------------
 # Stage 2: schema + statistical validation
@@ -60,6 +63,36 @@ validate:
     - Fog
   allowed_vendors: [1, 2, 3]
 
+  # Level 4: compound rules spanning several fields, which no single-column
+  # range or schema check can express.
+  business_rules:
+    wet_weather_conditions: [Rain, Snow]
+    snow_max_temperature_c: 5.0
+    stationary_max_km: 0.05
+    stationary_max_minutes: 60.0
+
+  # Level 3: distribution comparison against the training baseline.
+  statistical:
+    ks_pvalue_threshold: 0.01
+    # With ~100k baseline rows a KS test reaches significance on differences far too
+    # small to act on, so a minimum effect size must also be met before warning.
+    ks_statistic_warn: 0.05
+    chi2_pvalue_threshold: 0.01
+    mean_shift_sd_warn: 1.0
+    mean_shift_sd_fail: 2.0
+    null_rate_increase_fail: 0.10
+    category_shift_warn: 0.05
+    category_shift_fail: 0.15
+    action_on_failure: fail
+
+# --------------------------------------------------------------------------
+# Baseline profile: built from the training partition only, and used to run
+# Level 3 validation on every batch ingested after it.
+# --------------------------------------------------------------------------
+profile:
+  reference_sample_size: 2000
+  output_file: baseline_profile.json
+
 # --------------------------------------------------------------------------
 # Stage 3: feature engineering
 # --------------------------------------------------------------------------
@@ -69,6 +102,11 @@ features:
   rush_hours_evening: [16, 19]
   target: trip_duration_min
   output_file: features.parquet
+  # Imputation values are learned from the training partition and persisted with
+  # the pipeline, so serving never recomputes them from production data.
+  imputation:
+    weather_strategy: month_mode
+    numeric_strategy: month_median
 
 # --------------------------------------------------------------------------
 # Stage 4: train / validation / test split
