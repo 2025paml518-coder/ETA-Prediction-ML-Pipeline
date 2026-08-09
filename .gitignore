@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version.local
+
+# ---- Testing / tooling caches ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- Data (tracked by DVC, not Git) ----
+/data/raw/
+/data/interim/
+/data/processed/
+/data/quarantine/
+/data/drift/
+
+# ---- Models & experiment artifacts ----
+/models/
+/mlruns/
+/mlartifacts/
+
+# Reports are graded deliverables and stay in Git on purpose.
+
+# ---- Monitoring runtime state ----
+/monitoring/data/
+*.db
+*.sqlite3
+
+# ---- DVC ----
+/.dvcremote/
+.dvc/tmp
+.dvc/cache
+.dvc/config.local
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eta-prediction-pipeline"
+version = "0.1.0"
+description = "End-to-end ML pipeline for delivery / ride ETA prediction"
+requires-python = ">=3.11,<3.12"
+authors = [
+    { name = "Santosh", email = "2025paml516@wilp.bits-pilani.ac.in" },
+    { name = "Sharavanan", email = "2025paml517@wilp.bits-pilani.ac.in" },
+    { name = "Chandra", email = "2025paml518@wilp.bits-pilani.ac.in" },
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
