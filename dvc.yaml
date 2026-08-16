@@ -86,3 +86,31 @@ stages:
       - models/data_profile
       - reports/profile:
           cache: false
+
+  # Week 2 (M3). mlruns/ is intentionally not a DVC output: MLflow owns that store
+  # and rewrites it on every run, so tracking it here would fight the tracker.
+  train:
+    cmd: python -m src.models.train
+    deps:
+      - src/models/train.py
+      - src/models/compare.py
+      - src/models/evaluate.py
+      - src/models/hyperparameters.py
+      - src/utils/lineage.py
+      - src/features/build_features.py
+      - data/processed/train_features.parquet
+      - data/processed/val_features.parquet
+      - data/processed/test_features.parquet
+    params:
+      - seed
+      - train
+    outs:
+      - models/trained
+      - reports/training:
+          cache: false
+      - reports/model_comparison.md:
+          cache: false
+    metrics:
+      - reports/metrics.json:
+          cache: false
+
