@@ -1,285 +1,400 @@
-"""Train and compare ETA prediction models using RandomizedSearchCV."""
+"""Model training and experiment tracking (M3).
 
-import json
-import warnings
+Four candidates are trained and compared: a median baseline, Ridge, Random Forest
+and LightGBM. The baseline exists to answer the question that a table of R² scores
+cannot - whether the learned models are worth their operational cost at all.
+
+Three decisions here are deliberate and load-bearing:
+
+1. **Selection happens on validation, never on test.** The test partition is scored
+   once, for the final report. A model chosen by its test score turns that score
+   into a biased estimate of production error, which is precisely the number the
+   report is claiming to give.
+
+2. **Cross-validation is TimeSeriesSplit.** The split stage ordered rows in time on
+   purpose. A shuffled KFold inside the search would train on later trips to
+   predict earlier ones and quietly reintroduce the leakage that ordering avoided.
+
+3. **Ridge is wrapped in a Pipeline with StandardScaler.** Its L2 penalty is
+   scale-dependent, and this feature matrix mixes latitudes near 40.7 with sine
+   terms near 1. Scaling inside the pipeline also means the scaler is fitted per
+   CV fold and travels with the serialised model, so serving cannot drift from
+   training (M2 2.6.2, 2.7.2).
+"""
+
+from __future__ import annotations
+
+import argparse
+import time
 from pathlib import Path
+from typing import Any
 
+import matplotlib
+
+matplotlib.use("Agg")  # No display on CI or in a container.
+
+import matplotlib.pyplot as plt
 import mlflow
 import mlflow.sklearn
+import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
+from mlflow.models import infer_signature
+from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
+from src.config import ensure_dir, load_params, project_path
+from src.features.build_features import FEATURE_COLUMNS, TARGET
 from src.models.evaluate import calculate_metrics, format_metrics
-from src.models.hyperparameters import LGBM_PARAMS, RF_PARAMS, RIDGE_PARAMS, TUNING_CONFIG
+from src.models.hyperparameters import SEARCH_SPACES
+from src.utils.io import atomic_write_json
+from src.utils.lineage import collect as collect_lineage
+from src.utils.logging_utils import get_logger
 
-warnings.filterwarnings('ignore')
+logger = get_logger(__name__)
 
-# Paths
-DATA_DIR = Path('data/interim')
-MODELS_DIR = Path('models/trained')
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+PARTITIONS = ("train", "val", "test")
+
+TRACKED_DATA = (
+    "data/processed/train_features.parquet",
+    "data/processed/val_features.parquet",
+    "data/processed/test_features.parquet",
+    "models/feature_pipeline",
+)
 
 
-def load_data():
-    """Load train/val/test data."""
-    train = pd.read_parquet(DATA_DIR / 'train.parquet')
-    val = pd.read_parquet(DATA_DIR / 'val.parquet')
-    test = pd.read_parquet(DATA_DIR / 'test.parquet')
-    
-    train_features = pd.read_parquet('data/processed/train_features.parquet')
-    val_features = pd.read_parquet('data/processed/val_features.parquet')
-    test_features = pd.read_parquet('data/processed/test_features.parquet')
-    
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+def load_partitions(processed_dir: Path) -> dict[str, pd.DataFrame]:
     return {
-        'train': train,
-        'val': val,
-        'test': test,
-        'train_features': train_features,
-        'val_features': val_features,
-        'test_features': test_features,
+        name: pd.read_parquet(processed_dir / f"{name}_features.parquet")
+        for name in PARTITIONS
     }
 
 
-def prepare_data(data):
-    """Extract features and targets."""
-    feature_cols = [col for col in data['train_features'].columns 
-                   if col not in ['trip_id', 'pickup_datetime', 'trip_duration_min']]
-    
-    X_train = data['train_features'][feature_cols]
-    y_train = data['train']['trip_duration_min']
-    
-    X_val = data['val_features'][feature_cols]
-    y_val = data['val']['trip_duration_min']
-    
-    X_test = data['test_features'][feature_cols]
-    y_test = data['test']['trip_duration_min']
-    
-    return X_train, y_train, X_val, y_val, X_test, y_test, feature_cols
+def split_xy(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+    """Select features by the canonical contract, and the target from the same row.
+
+    Taking X and y from one frame removes a whole class of alignment bug: reading
+    the target from a separate file relies on both keeping identical row order
+    forever, and would fail silently the day one of them did not.
+    """
+    missing = [column for column in FEATURE_COLUMNS if column not in frame.columns]
+    if missing:
+        raise ValueError(f"Feature table is missing contract columns: {missing}")
+    if TARGET not in frame.columns:
+        raise ValueError(f"Feature table has no target column {TARGET!r}")
+    return frame.loc[:, list(FEATURE_COLUMNS)], frame[TARGET].astype(float)
 
 
-def train_ridge(X_train, y_train, X_val, y_val, X_test, y_test):
-    """Train Ridge Regression with RandomizedSearchCV."""
-    print('\n' + '='*60)
-    print('Training Ridge Regression...')
-    print('='*60)
-    
-    model = Ridge()
+# ---------------------------------------------------------------------------
+# Estimators
+# ---------------------------------------------------------------------------
+def build_estimator(name: str, seed: int):
+    if name == "baseline":
+        return DummyRegressor(strategy="median")
+    if name == "ridge":
+        # The scaler belongs inside the pipeline so it is refitted per CV fold.
+        return Pipeline([("scaler", StandardScaler()), ("model", Ridge(random_state=seed))])
+    if name == "random_forest":
+        return RandomForestRegressor(random_state=seed, n_jobs=-1)
+    if name == "lightgbm":
+        return LGBMRegressor(random_state=seed, n_jobs=-1, verbose=-1)
+    raise ValueError(f"Unknown model {name!r}")
+
+
+def fit_candidate(
+    name: str,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    params: dict,
+    seed: int,
+) -> tuple[Any, dict, float | None]:
+    """Fit one candidate, tuning it when it has a search space."""
+    cfg = params["train"]
+    estimator = build_estimator(name, seed)
+
+    if name not in SEARCH_SPACES:
+        estimator.fit(X_train, y_train)
+        return estimator, {}, None
+
+    splitter = TimeSeriesSplit(n_splits=cfg["cv"]["n_splits"])
     search = RandomizedSearchCV(
-        estimator=model,
-        param_distributions=RIDGE_PARAMS,
-        **TUNING_CONFIG,
-        scoring='neg_mean_absolute_error',
+        estimator=estimator,
+        param_distributions=SEARCH_SPACES[name],
+        n_iter=cfg["search"]["n_iter"][name],
+        cv=splitter,
+        scoring=cfg["search"]["scoring"],
+        random_state=cfg["search"]["random_state"],
+        # The estimators already parallelise internally; letting the search fan out
+        # as well oversubscribes the CPU and slows the whole thing down.
+        n_jobs=1,
+        refit=True,
     )
-    
     search.fit(X_train, y_train)
-    best_model = search.best_estimator_
-    
-    # Predictions
-    y_pred_train = best_model.predict(X_train)
-    y_pred_val = best_model.predict(X_val)
-    y_pred_test = best_model.predict(X_test)
-    
-    # Metrics
-    metrics_train = calculate_metrics(y_train, y_pred_train)
-    metrics_val = calculate_metrics(y_val, y_pred_val)
-    metrics_test = calculate_metrics(y_test, y_pred_test)
-    
-    print(f"\nBest params: {search.best_params_}")
-    print(f"Train: {format_metrics(metrics_train)}")
-    print(f"Val:   {format_metrics(metrics_val)}")
-    print(f"Test:  {format_metrics(metrics_test)}")
-    
-    return {
-        'model': best_model,
-        'model_type': 'Ridge',
-        'params': search.best_params_,
-        'metrics_train': metrics_train,
-        'metrics_val': metrics_val,
-        'metrics_test': metrics_test,
-        'cv_score': search.best_score_,
-    }
+    return search.best_estimator_, search.best_params_, float(-search.best_score_)
 
 
-def train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test):
-    """Train Random Forest with RandomizedSearchCV."""
-    print('\n' + '='*60)
-    print('Training Random Forest...')
-    print('='*60)
-    
-    model = RandomForestRegressor(random_state=42)
-    search = RandomizedSearchCV(
-        estimator=model,
-        param_distributions=RF_PARAMS,
-        **TUNING_CONFIG,
-        scoring='neg_mean_absolute_error',
+# ---------------------------------------------------------------------------
+# Artifacts
+# ---------------------------------------------------------------------------
+def _residual_plot(y_true: pd.Series, y_pred: np.ndarray, title: str, path: Path) -> None:
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    axes[0].scatter(y_pred, y_true - y_pred, s=4, alpha=0.25)
+    axes[0].axhline(0, color="crimson", lw=1)
+    axes[0].set_xlabel("Predicted duration (min)")
+    axes[0].set_ylabel("Residual (min)")
+    axes[0].set_title("Residuals vs prediction")
+
+    axes[1].scatter(y_true, y_pred, s=4, alpha=0.25)
+    limit = float(max(y_true.max(), y_pred.max()))
+    axes[1].plot([0, limit], [0, limit], color="crimson", lw=1)
+    axes[1].set_xlabel("Actual duration (min)")
+    axes[1].set_ylabel("Predicted duration (min)")
+    axes[1].set_title("Predicted vs actual")
+
+    fig.suptitle(title)
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def _importance_plot(model: Any, title: str, path: Path) -> list[float] | None:
+    estimator = model.named_steps["model"] if isinstance(model, Pipeline) else model
+    if hasattr(estimator, "feature_importances_"):
+        values = np.asarray(estimator.feature_importances_, dtype=float)
+    elif hasattr(estimator, "coef_"):
+        values = np.abs(np.asarray(estimator.coef_, dtype=float)).ravel()
+    else:
+        return None
+
+    order = np.argsort(values)[::-1][:20]
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.barh([FEATURE_COLUMNS[i] for i in order][::-1], values[order][::-1])
+    ax.set_title(title)
+    ax.set_xlabel("Importance")
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+    return values.tolist()
+
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+def train_candidate(
+    name: str,
+    data: dict[str, tuple[pd.DataFrame, pd.Series]],
+    params: dict,
+    lineage: dict[str, str],
+    artifact_root: Path,
+) -> dict:
+    """Train, evaluate and log one candidate as an MLflow run."""
+    cfg = params["train"]
+    seed = params["seed"]
+    X_train, y_train = data["train"]
+
+    logger.info("Training %s", name)
+    started = time.perf_counter()
+    model, best_params, cv_mae = fit_candidate(name, X_train, y_train, params, seed)
+    fit_seconds = time.perf_counter() - started
+
+    metrics: dict[str, dict] = {}
+    predictions: dict[str, np.ndarray] = {}
+    for partition, (X, y) in data.items():
+        predict_started = time.perf_counter()
+        y_pred = model.predict(X)
+        predictions[partition] = y_pred
+        metrics[partition] = calculate_metrics(y, y_pred)
+        metrics[partition]["predict_ms_per_1k"] = round(
+            (time.perf_counter() - predict_started) / max(len(X), 1) * 1e6, 4
+        )
+
+    with mlflow.start_run(run_name=name) as run:
+        mlflow.set_tags(
+            {
+                **lineage,
+                "model_family": name,
+                "cv_strategy": cfg["cv"]["strategy"],
+                "selection_partition": cfg["selection"]["partition"],
+                "feature_contract_size": str(len(FEATURE_COLUMNS)),
+            }
+        )
+        mlflow.log_params(
+            {
+                "model": name,
+                "seed": seed,
+                "n_features": len(FEATURE_COLUMNS),
+                "n_train_rows": len(X_train),
+                "cv_n_splits": cfg["cv"]["n_splits"],
+                "search_n_iter": cfg["search"]["n_iter"].get(name, 0),
+                **{k: v for k, v in best_params.items()},
+            }
+        )
+
+        for partition, values in metrics.items():
+            for metric_name, value in values.items():
+                mlflow.log_metric(f"{partition}_{metric_name}", value)
+        if cv_mae is not None:
+            mlflow.log_metric("cv_mae", cv_mae)
+        mlflow.log_metric("fit_seconds", round(fit_seconds, 3))
+
+        run_artifacts = artifact_root / name
+        _residual_plot(
+            data["val"][1], predictions["val"], f"{name} - validation", run_artifacts / "residuals.png"
+        )
+        importances = _importance_plot(
+            model, f"{name} - top 20 features", run_artifacts / "feature_importance.png"
+        )
+        mlflow.log_artifacts(str(run_artifacts), artifact_path="diagnostics")
+
+        # Signature and input example are what let the serving layer validate its
+        # payload against the model rather than guessing at column order.
+        signature = infer_signature(X_train.head(100), model.predict(X_train.head(100)))
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="model",
+            signature=signature,
+            input_example=X_train.head(5),
+        )
+
+        result = {
+            "model_type": name,
+            "run_id": run.info.run_id,
+            "params": best_params,
+            "cv_mae": cv_mae,
+            "fit_seconds": round(fit_seconds, 3),
+            "metrics": metrics,
+            "feature_importance": importances,
+        }
+
+    logger.info(
+        "%-14s val %s", name, format_metrics(metrics["val"])
     )
-    
-    search.fit(X_train, y_train)
-    best_model = search.best_estimator_
-    
-    # Predictions
-    y_pred_train = best_model.predict(X_train)
-    y_pred_val = best_model.predict(X_val)
-    y_pred_test = best_model.predict(X_test)
-    
-    # Metrics
-    metrics_train = calculate_metrics(y_train, y_pred_train)
-    metrics_val = calculate_metrics(y_val, y_pred_val)
-    metrics_test = calculate_metrics(y_test, y_pred_test)
-    
-    print(f"\nBest params: {search.best_params_}")
-    print(f"Train: {format_metrics(metrics_train)}")
-    print(f"Val:   {format_metrics(metrics_val)}")
-    print(f"Test:  {format_metrics(metrics_test)}")
-    
-    return {
-        'model': best_model,
-        'model_type': 'RandomForest',
-        'params': search.best_params_,
-        'metrics_train': metrics_train,
-        'metrics_val': metrics_val,
-        'metrics_test': metrics_test,
-        'cv_score': search.best_score_,
-    }
+    return result
 
 
-def train_lightgbm(X_train, y_train, X_val, y_val, X_test, y_test):
-    """Train LightGBM with RandomizedSearchCV."""
-    print('\n' + '='*60)
-    print('Training LightGBM...')
-    print('='*60)
-    
-    model = LGBMRegressor(random_state=42, verbose=-1)
-    search = RandomizedSearchCV(
-        estimator=model,
-        param_distributions=LGBM_PARAMS,
-        **TUNING_CONFIG,
-        scoring='neg_mean_absolute_error',
+def select_best(results: list[dict], params: dict) -> dict:
+    """Choose the winner on the validation partition."""
+    cfg = params["train"]["selection"]
+    partition, metric = cfg["partition"], cfg["metric"]
+    if partition == "test":
+        raise ValueError(
+            "Refusing to select on the test partition: it would bias the reported "
+            "generalisation estimate."
+        )
+    chooser = min if cfg["lower_is_better"] else max
+    return chooser(results, key=lambda r: r["metrics"][partition][metric])
+
+
+def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
+    params = params or load_params()
+    cfg = params["train"]
+
+    mlflow.set_tracking_uri((project_path(cfg["tracking_uri"])).as_uri())
+    mlflow.set_experiment(cfg["experiment_name"])
+
+    processed_dir = project_path(params["paths"]["processed"])
+    frames = load_partitions(processed_dir)
+    data = {name: split_xy(frame) for name, frame in frames.items()}
+    logger.info(
+        "Loaded %s train / %s val / %s test rows | %s features",
+        f"{len(data['train'][0]):,}",
+        f"{len(data['val'][0]):,}",
+        f"{len(data['test'][0]):,}",
+        len(FEATURE_COLUMNS),
     )
-    
-    search.fit(X_train, y_train)
-    best_model = search.best_estimator_
-    
-    # Predictions
-    y_pred_train = best_model.predict(X_train)
-    y_pred_val = best_model.predict(X_val)
-    y_pred_test = best_model.predict(X_test)
-    
-    # Metrics
-    metrics_train = calculate_metrics(y_train, y_pred_train)
-    metrics_val = calculate_metrics(y_val, y_pred_val)
-    metrics_test = calculate_metrics(y_test, y_pred_test)
-    
-    print(f"\nBest params: {search.best_params_}")
-    print(f"Train: {format_metrics(metrics_train)}")
-    print(f"Val:   {format_metrics(metrics_val)}")
-    print(f"Test:  {format_metrics(metrics_test)}")
-    
-    return {
-        'model': best_model,
-        'model_type': 'LightGBM',
-        'params': search.best_params_,
-        'metrics_train': metrics_train,
-        'metrics_val': metrics_val,
-        'metrics_test': metrics_test,
-        'cv_score': search.best_score_,
-    }
 
+    lineage = collect_lineage(TRACKED_DATA)
+    if lineage.get("git_dirty") == "true":
+        logger.warning("Working tree is dirty; runs will not be fully reproducible.")
 
-def log_to_mlflow(results):
-    """Log all results to MLflow."""
-    mlflow.set_experiment('eta_prediction_week2')
-    
-    for i, result in enumerate(results, 1):
-        with mlflow.start_run(run_name=f"{result['model_type']}-run{i}"):
-            # Log params
-            for key, value in result['params'].items():
-                mlflow.log_param(key, value)
-            
-            # Log metrics
-            mlflow.log_metric('train_mae', result['metrics_train']['mae'])
-            mlflow.log_metric('val_mae', result['metrics_val']['mae'])
-            mlflow.log_metric('test_mae', result['metrics_test']['mae'])
-            
-            mlflow.log_metric('train_r2', result['metrics_train']['r2'])
-            mlflow.log_metric('val_r2', result['metrics_val']['r2'])
-            mlflow.log_metric('test_r2', result['metrics_test']['r2'])
-            
-            # Log model
-            if result['model_type'] == 'LightGBM':
-                mlflow.sklearn.log_model(
-                    result['model'], 
-                    f"{result['model_type']}-model",
-                    skops_trusted_types=['collections.OrderedDict', 'lightgbm.basic.Booster', 'lightgbm.sklearn.LGBMRegressor']
-                )
-            else:
-                mlflow.sklearn.log_model(result['model'], f"{result['model_type']}-model")
-    
-    print("\nAll results logged to MLflow!")
+    artifact_root = ensure_dir(f"{params['paths']['reports']}/training")
+    enabled = [name for name, on in cfg["models"].items() if on]
 
+    results = [
+        train_candidate(name, data, params, lineage, artifact_root) for name in enabled
+    ]
+    best = select_best(results, params)
 
-def save_best_model(results):
-    """Save best model based on test MAE."""
-    best = min(results, key=lambda x: x['metrics_test']['mae'])
-    
-    import joblib
-    model_path = MODELS_DIR / f"{best['model_type'].lower()}-best.pkl"
-    joblib.dump(best['model'], model_path)
-    
-    print(f"\nBest model ({best['model_type']}) saved to {model_path}")
-    
-    # Save metadata
-    metadata = {
-        'model_type': best['model_type'],
-        'params': best['params'],
-        'metrics_test': best['metrics_test'],
-        'feature_importance': get_feature_importance(best['model'], best['model_type']),
-    }
-    
-    metadata_path = MODELS_DIR / 'best_model_metadata.json'
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    return best
+    models_dir = ensure_dir(f"{params['paths']['models']}/trained")
+    atomic_write_json(
+        {
+            "selected_by": f"{cfg['selection']['partition']}_{cfg['selection']['metric']}",
+            "best_model": best["model_type"],
+            "best_run_id": best["run_id"],
+            "params": best["params"],
+            "metrics": best["metrics"],
+            "lineage": lineage,
+            "candidates": [
+                {
+                    "model_type": r["model_type"],
+                    "run_id": r["run_id"],
+                    "val_mae": r["metrics"]["val"]["mae"],
+                    "test_mae": r["metrics"]["test"]["mae"],
+                }
+                for r in results
+            ],
+        },
+        models_dir / "best_model_metadata.json",
+    )
 
+    registered = mlflow.register_model(
+        model_uri=f"runs:/{best['run_id']}/model",
+        name=cfg["registered_model_name"],
+    )
+    logger.info(
+        "Registered %s version %s from run %s",
+        cfg["registered_model_name"],
+        registered.version,
+        best["run_id"],
+    )
 
-def get_feature_importance(model, model_type):
-    """Extract feature importance from model."""
-    if model_type in ['RandomForest', 'LightGBM'] and hasattr(model, 'feature_importances_'):
-        return model.feature_importances_.tolist()
-    return []
+    atomic_write_json(
+        [
+            {k: v for k, v in r.items() if k != "feature_importance"}
+            for r in results
+        ],
+        artifact_root / "run_results.json",
+    )
 
-
-def run_training(experiment_name='baseline'):
-    """Run full training pipeline."""
-    print("\nLoading data...")
-    data = load_data()
-    X_train, y_train, X_val, y_val, X_test, y_test, feature_cols = prepare_data(data)
-    
-    print(f"Feature dimensions: {X_train.shape}")
-    
-    # Train all models
-    results = []
-    results.append(train_ridge(X_train, y_train, X_val, y_val, X_test, y_test))
-    results.append(train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test))
-    results.append(train_lightgbm(X_train, y_train, X_val, y_val, X_test, y_test))
-    
-    # Log to MLflow
-    log_to_mlflow(results)
-    
-    # Save best model
-    best = save_best_model(results)
-    
+    # Flat and shallow so `dvc metrics show` and `dvc metrics diff` can read it.
+    atomic_write_json(
+        {
+            "best_model": best["model_type"],
+            **{
+                f"{partition}_{metric}": value
+                for partition, values in best["metrics"].items()
+                for metric, value in values.items()
+            },
+            **{
+                f"{r['model_type']}_val_mae": r["metrics"]["val"]["mae"] for r in results
+            },
+        },
+        project_path(f"{params['paths']['reports']}/metrics.json"),
+    )
     return results, best
 
 
-if __name__ == '__main__':
-    results, best = run_training()
-    print("\n" + "="*60)
-    print("Week 2 Training Complete!")
-    print(f"Best Model: {best['model_type']}")
-    print(f"Test MAE: {best['metrics_test']['mae']} minutes")
-    print("="*60)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train and compare ETA models.")
+    parser.add_argument("--params", default="params.yaml")
+    args = parser.parse_args()
+
+    params = load_params(args.params)
+    results, best = run_training(params)
+
+    from src.models.compare import compare_models
+
+    compare_models(results, best, params)
+
+
+if __name__ == "__main__":
+    main()

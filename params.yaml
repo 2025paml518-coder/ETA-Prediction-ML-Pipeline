@@ -117,3 +117,43 @@ split:
   strategy: temporal
   val_fraction: 0.15
   test_fraction: 0.15
+
+# --------------------------------------------------------------------------
+# Stage 5: model training and experiment tracking (M3)
+# --------------------------------------------------------------------------
+train:
+  experiment_name: eta-prediction
+  registered_model_name: eta-predictor
+  tracking_uri: mlruns
+
+  # The model is chosen on VALIDATION. The test partition is scored once, for the
+  # final report only - selecting on it would make the reported figure a biased
+  # estimate of production error rather than an honest one.
+  selection:
+    partition: val
+    metric: mae
+    lower_is_better: true
+
+  cv:
+    # TimeSeriesSplit, not KFold. The split stage ordered the data in time on
+    # purpose; shuffling inside the search would put later trips in the training
+    # folds of earlier ones and reintroduce exactly the leakage that was avoided.
+    strategy: time_series
+    n_splits: 3
+
+  search:
+    scoring: neg_mean_absolute_error
+    random_state: 42
+    # Search budget per model. Random Forest is deliberately smaller: each fit is
+    # an order of magnitude more expensive than the alternatives.
+    n_iter:
+      ridge: 12
+      random_forest: 8
+      lightgbm: 20
+
+  models:
+    baseline: true
+    ridge: true
+    random_forest: true
+    lightgbm: true
+
