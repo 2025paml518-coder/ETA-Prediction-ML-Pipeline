@@ -1,0 +1,29 @@
+# podman-compose up --build
+#
+# Week 3 ships the API alone. Prometheus and Grafana arrive in Week 4; the API
+# already exposes /metrics so they need no change to the service when they do.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: eta-api:latest
+    container_name: eta-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Uvicorn worker count. Each worker holds its own copy of the model, so this
+      # trades memory for concurrency; one is right for a laptop demo.
+      UVICORN_WORKERS: "1"
+    volumes:
+      # Prediction log persists across container restarts so Week 4 monitoring can
+      # look back beyond the current process lifetime.
+      - ./monitoring/data:/app/monitoring/data:z
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped

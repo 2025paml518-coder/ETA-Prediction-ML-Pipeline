@@ -1,0 +1,58 @@
+{
+  "url": "http://127.0.0.1:8000",
+  "generated_at": "2026-08-16T12:07:50",
+  "model_version": "3",
+  "single": {
+    "requests": 500,
+    "concurrency": 16,
+    "wall_seconds": 11.001,
+    "throughput_rps": 45.45,
+    "errors": 0,
+    "latency_ms": {
+      "min": 61.64,
+      "p50": 332.277,
+      "p90": 450.58,
+      "p95": 515.927,
+      "p99": 742.081,
+      "max": 1103.859,
+      "mean": 338.916
+    }
+  },
+  "batch": [
+    {
+      "batch_size": 1,
+      "status": 200,
+      "total_ms": 29.324,
+      "ms_per_trip": 29.3244,
+      "trips_per_second": 34.1
+    },
+    {
+      "batch_size": 10,
+      "status": 200,
+      "total_ms": 25.75,
+      "ms_per_trip": 2.575,
+      "trips_per_second": 388.3
+    },
+    {
+      "batch_size": 50,
+      "status": 200,
+      "total_ms": 43.933,
+      "ms_per_trip": 0.8787,
+      "trips_per_second": 1138.1
+    },
+    {
+      "batch_size": 100,
+      "status": 200,
+      "total_ms": 64.194,
+      "ms_per_trip": 0.6419,
+      "trips_per_second": 1557.8
+    },
+    {
+      "batch_size": 250,
+      "status": 200,
+      "total_ms": 98.013,
+      "ms_per_trip": 0.3921,
+      "trips_per_second": 2550.7
+    }
+  ]
+}
