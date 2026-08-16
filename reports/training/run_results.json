@@ -1,10 +1,10 @@
 [
   {
     "model_type": "baseline",
-    "run_id": "428ef59d49954206a2f2861624aa7dcb",
+    "run_id": "87a9754d53224ec48612bd0116efcee1",
     "params": {},
     "cv_mae": null,
-    "fit_seconds": 0.079,
+    "fit_seconds": 0.076,
     "metrics": {
       "train": {
         "mae": 12.0295,
@@ -12,7 +12,7 @@
         "r2": -0.0743,
         "mape": 66.7639,
         "p90_abs_error": 27.6782,
-        "predict_ms_per_1k": 0.0528
+        "predict_ms_per_1k": 0.0908
       },
       "val": {
         "mae": 11.9042,
@@ -20,7 +20,7 @@
         "r2": -0.0687,
         "mape": 67.3884,
         "p90_abs_error": 27.2227,
-        "predict_ms_per_1k": 0.0955
+        "predict_ms_per_1k": 0.1906
       },
       "test": {
         "mae": 12.1366,
@@ -28,19 +28,19 @@
         "r2": -0.0817,
         "mape": 65.0795,
         "p90_abs_error": 28.5594,
-        "predict_ms_per_1k": 0.0899
+        "predict_ms_per_1k": 0.1837
       }
     }
   },
   {
     "model_type": "ridge",
-    "run_id": "32068f0f70514b9e9fb4eb8ef39e617a",
+    "run_id": "4f9edacb12e447899563e633304b8fbb",
     "params": {
       "model__solver": "cholesky",
       "model__alpha": 10.0
     },
     "cv_mae": 3.8763304905255134,
-    "fit_seconds": 9.219,
+    "fit_seconds": 15.423,
     "metrics": {
       "train": {
         "mae": 3.8937,
@@ -48,7 +48,7 @@
         "r2": 0.8834,
         "mape": 18.9317,
         "p90_abs_error": 8.4982,
-        "predict_ms_per_1k": 0.3245
+        "predict_ms_per_1k": 0.5142
       },
       "val": {
         "mae": 3.8282,
@@ -56,7 +56,7 @@
         "r2": 0.884,
         "mape": 18.7224,
         "p90_abs_error": 8.2057,
-        "predict_ms_per_1k": 0.4084
+        "predict_ms_per_1k": 0.6362
       },
       "test": {
         "mae": 3.9513,
@@ -64,13 +64,13 @@
         "r2": 0.882,
         "mape": 18.9773,
         "p90_abs_error": 8.5964,
-        "predict_ms_per_1k": 0.4318
+        "predict_ms_per_1k": 0.5631
       }
     }
   },
   {
     "model_type": "random_forest",
-    "run_id": "d5cfc20690174129a3f015c788fe168d",
+    "run_id": "c2e6849caa624550a53b20e33d0d86cd",
     "params": {
       "n_estimators": 300,
       "min_samples_split": 10,
@@ -79,7 +79,7 @@
       "max_depth": 15
     },
     "cv_mae": 3.5567220773781543,
-    "fit_seconds": 228.245,
+    "fit_seconds": 241.175,
     "metrics": {
       "train": {
         "mae": 2.6108,
@@ -87,7 +87,7 @@
         "r2": 0.9485,
         "mape": 11.6801,
         "p90_abs_error": 5.9285,
-        "predict_ms_per_1k": 7.321
+        "predict_ms_per_1k": 6.8549
       },
       "val": {
         "mae": 3.5091,
@@ -95,7 +95,7 @@
         "r2": 0.8982,
         "mape": 15.2812,
         "p90_abs_error": 7.9664,
-        "predict_ms_per_1k": 10.5435
+        "predict_ms_per_1k": 9.3732
       },
       "test": {
         "mae": 3.5956,
@@ -103,13 +103,13 @@
         "r2": 0.8977,
         "mape": 15.3267,
         "p90_abs_error": 8.2517,
-        "predict_ms_per_1k": 10.6586
+        "predict_ms_per_1k": 9.5462
       }
     }
   },
   {
     "model_type": "lightgbm",
-    "run_id": "b3ecd58ca26d4e828193c1e5985e9bfa",
+    "run_id": "e61403e2a2bb46e48e2249dc4891f38e",
     "params": {
       "subsample": 1.0,
       "num_leaves": 31,
@@ -120,7 +120,7 @@
       "colsample_bytree": 0.85
     },
     "cv_mae": 3.5249770442559014,
-    "fit_seconds": 181.668,
+    "fit_seconds": 126.909,
     "metrics": {
       "train": {
         "mae": 3.3924,
@@ -128,7 +128,7 @@
         "r2": 0.9115,
         "mape": 14.9728,
         "p90_abs_error": 7.8068,
-        "predict_ms_per_1k": 2.0417
+        "predict_ms_per_1k": 1.9072
       },
       "val": {
         "mae": 3.4741,
@@ -136,7 +136,7 @@
         "r2": 0.9007,
         "mape": 15.2049,
         "p90_abs_error": 7.9651,
-        "predict_ms_per_1k": 2.6912
+        "predict_ms_per_1k": 1.6872
       },
       "test": {
         "mae": 3.5646,
@@ -144,7 +144,7 @@
         "r2": 0.8992,
         "mape": 15.252,
         "p90_abs_error": 8.2183,
-        "predict_ms_per_1k": 2.8167
+        "predict_ms_per_1k": 2.0261
       }
     }
   }

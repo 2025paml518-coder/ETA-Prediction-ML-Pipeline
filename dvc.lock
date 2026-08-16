@@ -199,8 +199,8 @@ stages:
       size: 1912135
     - path: src/features/build_features.py
       hash: md5
-      md5: 86530e7e86999aefa4324d0d44fd9954
-      size: 19757
+      md5: 6c1c6b6c1f08a679469c0cc3a19f8dc6
+      size: 21875
     - path: src/features/make_features.py
       hash: md5
       md5: 0a5d515477acd9c964a2ee454d8b7187
@@ -261,8 +261,8 @@ stages:
     deps:
     - path: data/interim/train.parquet
       hash: md5
-      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
-      size: 8147307
+      md5: f922b73e40652bb1fd823a7524515f40
+      size: 8247803
     - path: src/data/make_profile.py
       hash: md5
       md5: 64fe1e0d9b404b2ef029ef9f46af9538
@@ -305,8 +305,8 @@ stages:
       size: 2914720
     - path: src/features/build_features.py
       hash: md5
-      md5: 86530e7e86999aefa4324d0d44fd9954
-      size: 19757
+      md5: 6c1c6b6c1f08a679469c0cc3a19f8dc6
+      size: 21875
     - path: src/models/compare.py
       hash: md5
       md5: 5c788154abec3fc262e9c660fd439475
@@ -321,8 +321,8 @@ stages:
       size: 1548
     - path: src/models/train.py
       hash: md5
-      md5: 9d47923c74faef0a249ec2e8e12e4486
-      size: 15078
+      md5: 23edcef33a49f961c408e67bd5611d7d
+      size: 15670
     - path: src/utils/lineage.py
       hash: md5
       md5: c67cc66d22bccf531e2340959b18b019
@@ -356,19 +356,19 @@ stages:
     outs:
     - path: models/trained
       hash: md5
-      md5: 15c65a89f65fab51a88d56bdd2afcd29.dir
-      size: 1986
-      nfiles: 1
+      md5: 7f02b0b778f943c91fecf1b5a3ee33c5.dir
+      size: 608073
+      nfiles: 6
     - path: reports/metrics.json
       hash: md5
-      md5: af7221a67e675e0c5b6257925c283c52
+      md5: 35d6bf01b6b8e4bac26d15b47f9c8578
       size: 650
     - path: reports/model_comparison.md
       hash: md5
-      md5: 52c28d4ad340e50447e86fabd06df77f
-      size: 2742
+      md5: cd4b36ffb6b862559268dfd97b770f19
+      size: 2743
     - path: reports/training
       hash: md5
-      md5: f0151b280c8b633dafb764ed4d123d74.dir
+      md5: 810d4c497db14664e07c0e6b441b1a84.dir
       size: 546870
       nfiles: 8
