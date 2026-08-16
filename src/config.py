@@ -114,9 +114,8 @@ def validate_params(params: dict[str, Any] | None = None) -> None:
     if params.get('generate'):
         start = params['generate'].get('start_date')
         end = params['generate'].get('end_date')
-        if start and end and _is_valid_date(start) and _is_valid_date(end):
-            if start >= end:
-                errors.append(f"Invalid date range: start_date ({start}) >= end_date ({end})")
+        if start and end and _is_valid_date(start) and _is_valid_date(end) and start >= end:
+            errors.append(f"Invalid date range: start_date ({start}) >= end_date ({end})")
     
     # Check split fractions don't exceed 1.0
     if params.get('split'):

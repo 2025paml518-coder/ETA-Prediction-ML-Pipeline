@@ -5,10 +5,10 @@ Run after `dvc repro` to ensure the feature matrix is in the expected format.
 """
 
 import json
-import pytest
-import pandas as pd
+
 import numpy as np
-from pathlib import Path
+import pandas as pd
+import pytest
 
 
 class TestWeek2Integration:
@@ -245,7 +245,6 @@ class TestWeek2Integration:
         expected_features = self.feature_spec['feature_columns']
         features_to_check = self.train_features[expected_features].select_dtypes(include=['number'])
         
-        means = features_to_check.mean()
         stds = features_to_check.std()
         
         # Each feature must have some variation

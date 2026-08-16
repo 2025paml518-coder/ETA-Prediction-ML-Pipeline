@@ -1,12 +1,10 @@
 # Week 1 Data Explorer Dashboard
 # Visualise the ETA-Prediction data engineering pipeline outputs
 
-import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import json
-from pathlib import Path
+import streamlit as st
 
 st.set_page_config(page_title='ETA Prediction – Week 1 Explorer', page_icon='🗺️', layout='wide')
 
