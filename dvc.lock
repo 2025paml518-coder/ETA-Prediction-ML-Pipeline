@@ -33,18 +33,18 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 7679157e8120fd800fbd85a7fcdb7bbe
+      md5: 0d1672e44aa7a84583ed709b5ce08a0b
       size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 720419e78f6f0ad467e894e6164e32a2
+      md5: f9234ea5a07cb88e4fef3c34a982e024
       size: 8444280
   validate:
     cmd: python -m src.data.validate
     deps:
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 720419e78f6f0ad467e894e6164e32a2
+      md5: f9234ea5a07cb88e4fef3c34a982e024
       size: 8444280
     - path: src/data/quality.py
       hash: md5
@@ -133,15 +133,15 @@ stages:
     outs:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: cfe4a5aeefca9a77227ebe69801cccd9
+      md5: be68cb6fdc37c13a5059984944e5a27a
       size: 11094843
     - path: data/quarantine/quarantined_trips.parquet
       hash: md5
-      md5: 59780a55ecd039b74e7f552c95858719
+      md5: 536544aec279651f6a9df88c61ecf4c0
       size: 479796
     - path: reports/validation
       hash: md5
-      md5: f53ac506d5ec042ab287dfa4e14fcb5f.dir
+      md5: e4afe067be9a8b2d12dec1c2f39cd539.dir
       size: 6888
       nfiles: 3
   split:
@@ -149,7 +149,7 @@ stages:
     deps:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: cfe4a5aeefca9a77227ebe69801cccd9
+      md5: be68cb6fdc37c13a5059984944e5a27a
       size: 11094843
     - path: src/data/split.py
       hash: md5
@@ -172,30 +172,30 @@ stages:
       size: 455
     - path: data/interim/test.parquet
       hash: md5
-      md5: 5e8f76f8a9291cea45726827c7ff0945
+      md5: 3a97d8768835069eab583128335fd04a
       size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: 5835a68797e7655936809c6eb4b437f0
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
       size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: 8535cb962883f8cc4c26e8a76d034540
+      md5: cd60bd7b4029871827f9b6fc3072c496
       size: 1911459
   features:
     cmd: python -m src.features.make_features
     deps:
     - path: data/interim/test.parquet
       hash: md5
-      md5: 5e8f76f8a9291cea45726827c7ff0945
+      md5: 3a97d8768835069eab583128335fd04a
       size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: 5835a68797e7655936809c6eb4b437f0
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
       size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: 8535cb962883f8cc4c26e8a76d034540
+      md5: cd60bd7b4029871827f9b6fc3072c496
       size: 1911459
     - path: src/features/build_features.py
       hash: md5
@@ -236,15 +236,15 @@ stages:
     outs:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: 35c48aa338b45930acba97c36969cac6
+      md5: 34e125b3e0d850829fa3ff8f66c967b8
       size: 2919080
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: 7c0a7536944ea967ffec77f7fa34717b
+      md5: ad2ed24de9d566fd369f53314948407f
       size: 12805214
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: 5fc9baca198e6782a9e94a90974db8b9
+      md5: 5fa45e983440b1e22f6c9acb184f33a3
       size: 2916993
     - path: models/feature_pipeline
       hash: md5
@@ -261,7 +261,7 @@ stages:
     deps:
     - path: data/interim/train.parquet
       hash: md5
-      md5: 5835a68797e7655936809c6eb4b437f0
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
       size: 8147307
     - path: src/data/make_profile.py
       hash: md5

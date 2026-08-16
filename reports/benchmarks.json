@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-08-16T07:34:03.014162",
+  "data_volumes": {
+    "raw": {
+      "rows": 150450,
+      "columns": 15,
+      "file_size_mb": 8.05,
+      "bytes_per_row": 56.0
+    },
+    "validated": {
+      "rows": 144959,
+      "columns": 17,
+      "file_size_mb": 10.58,
+      "bytes_per_row": 77.0
+    },
+    "quarantined": {
+      "rows": 5491,
+      "columns": 19,
+      "file_size_mb": 0.46,
+      "bytes_per_row": 87.0
+    },
+    "train": {
+      "rows": 101471,
+      "columns": 17,
+      "file_size_mb": 7.77,
+      "bytes_per_row": 80.0
+    },
+    "val": {
+      "rows": 21744,
+      "columns": 17,
+      "file_size_mb": 1.82,
+      "bytes_per_row": 88.0
+    },
+    "test": {
+      "rows": 21744,
+      "columns": 17,
+      "file_size_mb": 1.82,
+      "bytes_per_row": 88.0
+    },
+    "train_features": {
+      "rows": 101471,
+      "columns": 47,
+      "file_size_mb": 12.21,
+      "bytes_per_row": 126.0
+    },
+    "val_features": {
+      "rows": 21744,
+      "columns": 47,
+      "file_size_mb": 2.78,
+      "bytes_per_row": 134.0
+    },
+    "test_features": {
+      "rows": 21744,
+      "columns": 47,
+      "file_size_mb": 2.78,
+      "bytes_per_row": 134.0
+    }
+  },
+  "feature_pipeline": {
+    "single_row_ms": 13.0116,
+    "batch_1k_ms": 17.51,
+    "batch_1k_rows_per_sec": 57123.0
+  }
+}
