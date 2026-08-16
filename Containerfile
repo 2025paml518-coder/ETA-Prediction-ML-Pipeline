@@ -2,8 +2,13 @@
 # copies only that venv and the application, so compilers and build headers never
 # reach the shipped image.
 #
-# Build:  podman build -t eta-api:latest -f Containerfile .
-# Run:    podman run --rm -p 8000:8000 eta-api:latest
+# Build:  podman build --format docker -t eta-api:latest -f Containerfile .
+# Run:    podman-compose up          (preferred - it applies the healthcheck)
+#
+# --format docker is required for the HEALTHCHECK below to be recorded at all: Podman
+# defaults to the OCI format, which has no healthcheck field and discards it silently.
+# Note that `podman run` still does not *inherit* the recorded healthcheck; compose
+# declares it explicitly, and a plain run needs --health-cmd to activate it.
 
 FROM python:3.11-slim AS builder
 
@@ -20,9 +25,11 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Dependencies are copied and installed before the source so that editing code does
-# not invalidate the (slow) dependency layer.
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# not invalidate the (slow) dependency layer. Only the serving set is installed:
+# DVC, pytest, ruff, Streamlit, Plotly and matplotlib are unreachable from the request
+# path and would be pure weight and attack surface in a shipped image.
+COPY requirements-serving.txt .
+RUN pip install --upgrade pip && pip install -r requirements-serving.txt
 
 
 FROM python:3.11-slim AS runtime

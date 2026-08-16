@@ -1,0 +1,22 @@
+# Serving dependencies only.
+#
+# The full requirements.txt installs DVC, pytest, ruff, Streamlit, Plotly and
+# matplotlib. None of them are reachable from the request path, and every one of them
+# is extra surface area and size in a shipped image, so the container installs this
+# file instead.
+pandas>=2.2,<3.0
+numpy>=1.26,<3.0
+pyyaml>=6.0
+scikit-learn>=1.5,<2.0
+scipy>=1.11,<2.0
+lightgbm>=4.0,<5.0
+
+# Loads the MLmodel export produced by the training stage. The full package rather
+# than mlflow-skinny: skinny omits the model-flavour machinery that
+# mlflow.sklearn.load_model needs.
+mlflow>=2.0,<3.0
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+prometheus-client>=0.20,<1.0
