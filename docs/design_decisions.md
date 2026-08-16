@@ -329,6 +329,151 @@ zone-and-hour aggregates, loaded once by the service and used for every request.
 
 ---
 
+## Week 2 — M3: Experimentation, Versioning & Reproducibility
+
+### D15. The model is selected on validation, never on test
+
+**Decision.** `select_best` ranks candidates by validation MAE and raises outright if
+the configured selection partition is `test`.
+
+**Why this is not pedantry.** The first draft of this stage picked the winner with
+`min(results, key=lambda r: r["metrics_test"]["mae"])`. That single line converts the
+reported test MAE from an unbiased estimate of production error into an optimistic
+one, because the test partition has now influenced the model through the selection
+step. The report would then be quoting a number that means something different from
+what a reader assumes it means. Since the whole purpose of holding out a test set is
+to answer "what will this cost in production", corrupting it costs more than any
+modelling gain.
+
+The guard is a raised exception rather than a comment, because the failure is silent
+and the resulting numbers still look entirely plausible.
+
+**Consequence.** LightGBM won on validation (3.474) and also happens to lead on test
+(3.565); the discipline cost nothing here, which is the usual case. It matters on the
+occasions when the ranking differs, and those are exactly the occasions you cannot
+detect without it.
+
+---
+
+### D16. TimeSeriesSplit inside the hyperparameter search
+
+**Decision.** `RandomizedSearchCV` uses `TimeSeriesSplit(n_splits=3)`.
+
+**Why.** D5 split the data temporally so the model would never be scored on
+conditions it had already seen. A default `cv=5` re-introduces exactly that leak one
+level down: shuffled folds train on later trips to predict earlier ones, within the
+training partition. The search would then select hyperparameters that exploit
+information unavailable at inference, and the CV score would be optimistic in a way
+the validation score would not reveal.
+
+**Cost accepted.** TimeSeriesSplit trains on less data in early folds, so CV scores
+are slightly pessimistic and the search is marginally noisier. A pessimistic estimate
+of an honest quantity beats an optimistic estimate of a meaningless one.
+
+---
+
+### D17. Ridge is wrapped in a scaling pipeline
+
+**Decision.** `Pipeline([("scaler", StandardScaler()), ("model", Ridge())])`, with the
+search space addressing `model__alpha` and `model__solver`.
+
+**Why.** The feature matrix mixes `pickup_latitude` (std 0.05), `hour_sin` (std 0.69)
+and `expected_duration_route` (std 14.2). Ridge penalises the squared L2 norm of the
+coefficients, which is scale-dependent, so on unscaled inputs an `alpha` of 1000
+penalises the coefficient on latitude almost out of existence while barely touching
+the duration prior. The model that results is not the model the grid intended to test.
+
+**Why inside a Pipeline rather than scaling the table.** Two reasons. The scaler is
+refitted on each CV fold's training portion, so fold scores are not contaminated by
+statistics from the fold being scored. And the fitted scaler is serialised *with* the
+estimator, so the serving path cannot use different scaling parameters from training —
+the same argument as D7, applied to the model artefact instead of the feature
+pipeline (M2 2.6.2, 2.7.2).
+
+Tree models are scale-invariant and are tuned directly, without the wrapper.
+
+---
+
+### D18. A median baseline is a tracked candidate
+
+**Decision.** `DummyRegressor(strategy="median")` is trained, logged and reported
+alongside the real models.
+
+**Why.** R² of 0.90 sounds conclusive until you ask what the alternative was. The
+baseline answers it in the units the business cares about: predicting the median for
+every trip gives 12.14 min test MAE, and LightGBM gives 3.56 min. The 70.6% reduction
+is the actual return on operating a model, a serving container and a monitoring stack.
+Without that row, the comparison table measures models against each other but never
+against doing nothing.
+
+It is also the cheapest possible regression test on the feature pipeline: if a future
+change ever makes the learned models approach 12 minutes, something upstream has
+broken, and `test_learned_models_beat_the_median_baseline` fails.
+
+---
+
+### D19. Reproducibility is verified, not asserted
+
+**Decision.** `src/models/reproduce_run.py` reads a run from MLflow — parameters, tags
+and dataset hashes only — refits, and compares against the originally logged metrics,
+exiting non-zero beyond a tolerance.
+
+**Why read only from the tracker.** "Our code is deterministic" is a weaker claim than
+the rubric asks for. The question is whether the *logged record* is complete enough to
+stand on its own months later. Reconstructing the run from MLflow alone tests exactly
+that, and fails if a parameter was never logged.
+
+**Why it fails loudly.** A near-match that is quietly accepted is how experiment logs
+become untrustworthy. The script reports the maximum absolute delta and exits non-zero
+past tolerance.
+
+**Result.** The selected LightGBM run reproduces with a maximum delta of 0.0 across
+all nine tracked metrics.
+
+**Provenance recorded per run.** Git commit, branch, working-tree cleanliness, and the
+DVC md5 of every dataset consumed. The dirty-tree flag matters: a run recorded from a
+modified working tree is not identified by its commit hash alone, and the script warns
+when reproducing one instead of pretending otherwise (M2 2.9).
+
+---
+
+### D20. MLflow tracks artefacts and a signature, not just scalars
+
+**Decision.** Each run logs params, five metrics per partition, residual and
+feature-importance plots, a model signature, an input example, and the provenance tags
+above. The winner is registered in the MLflow Model Registry as `eta-predictor`.
+
+**Why the signature and input example.** They pin the expected column names, order and
+dtypes into the model artefact, so the Week 3 service can validate an incoming payload
+against the model rather than trusting that its own construction of the feature frame
+happens to match. This is the training-serving skew guard (D7) carried one layer
+further, into the model itself.
+
+**Why the registry.** It gives the serving layer a stable name and version to resolve
+rather than a filesystem path to a `.pkl`, which is what makes the Week 4 retraining
+trigger able to promote a new model without redeploying the API.
+
+**Why `mlruns/` is not a DVC output.** MLflow owns and rewrites that store on every
+run; declaring it as a stage output would put two tools in charge of the same
+directory. DVC tracks the derived artefacts (`models/trained/`, reports, metrics)
+instead.
+
+---
+
+### D21. Reported findings are generated from results
+
+**Decision.** `compare.py` derives every statement in the report from the run results,
+including unflattering ones — the train-to-validation spread is labelled as
+overfitting when it exceeds 25% of train MAE.
+
+**Why.** The previous version wrote fixed conclusions into the report before any model
+had run: "Best model achieves < 12 minutes MAE on test set ✓", "Gradient boosting
+outperforms baseline by 10%+". Those sentences would have appeared unchanged had the
+model been catastrophically bad. A report that asserts its conclusions regardless of
+the evidence is worse than no report, because it is presented as evidence.
+
+---
+
 ## M2 requirement coverage
 
 | M2 section | Requirement | Where |
