@@ -74,7 +74,7 @@ def measure_feature_pipeline_latency() -> dict[str, Any]:
         
         pipeline = FeaturePipeline.load('models/feature_pipeline')
         
-        # Create a synthetic single row
+        # Create a synthetic single row with correct column names
         sample_row = pd.DataFrame({
             'pickup_datetime': ['2024-01-15 09:30:00'],
             'pickup_latitude': [40.7580],
@@ -83,13 +83,12 @@ def measure_feature_pipeline_latency() -> dict[str, Any]:
             'dropoff_longitude': [-73.9776],
             'vendor_id': [1],
             'passenger_count': [1],
-            'store_and_forward': [False],
-            'trip_distance_miles': [0.5],
+            'store_and_fwd_flag': [False],
+            'weather_condition': ['Clear'],
             'traffic_index': [0.5],
             'temperature_c': [15.0],
             'precipitation_mm': [0.0],
             'wind_kph': [10.0],
-            'weather': ['Clear'],
         })
         
         # Warm up
@@ -132,12 +131,12 @@ def save_benchmarks(benchmarks: dict[str, Any]) -> None:
     with open(BENCHMARK_OUTPUT, 'w') as f:
         json.dump(benchmarks, f, indent=2)
     
-    print(f"✓ Benchmarks saved to {BENCHMARK_OUTPUT}")
+    print(f"Benchmarks saved to {BENCHMARK_OUTPUT}")
 
 
 def run_all_benchmarks() -> dict[str, Any]:
     """Run all benchmarks and save to file."""
-    print("⏱️  Running Week 1 benchmarks...")
+    print("Running Week 1 benchmarks...")
     
     benchmarks = {
         'timestamp': datetime.now().isoformat(),
@@ -148,7 +147,7 @@ def run_all_benchmarks() -> dict[str, Any]:
     save_benchmarks(benchmarks)
     
     # Print summary
-    print("\n📊 Data Volumes:")
+    print("\nData Volumes:")
     for stage, metrics in benchmarks['data_volumes'].items():
         if 'error' not in metrics:
             print(
@@ -158,7 +157,7 @@ def run_all_benchmarks() -> dict[str, Any]:
                 f"{metrics['file_size_mb']:>7.1f} MB"
             )
     
-    print("\n⚡ Feature Pipeline Latency:")
+    print("\nFeature Pipeline Latency:")
     if 'error' not in benchmarks['feature_pipeline']:
         fp = benchmarks['feature_pipeline']
         print(f"  Single row:        {fp['single_row_ms']:.4f} ms")
