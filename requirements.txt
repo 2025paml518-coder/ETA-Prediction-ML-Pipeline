@@ -8,6 +8,10 @@ pandera>=0.20,<1.0
 scikit-learn>=1.5,<2.0
 dvc>=3.50,<4.0
 
+# Week 1 (M2) - optional enhancements
+streamlit>=1.28,<2.0
+plotly>=5.17,<6.0
+
 # Development tooling
 pytest>=8.0
 ruff>=0.6
