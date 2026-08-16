@@ -136,6 +136,7 @@ class FeaturePipeline:
     imputation: dict = field(default_factory=dict, repr=False)
     global_speed: float = 20.0
     fitted_on_rows: int = 0
+    _lookup_cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     # ---------------------------------------------------------------- fitting
     @classmethod
@@ -156,8 +157,9 @@ class FeaturePipeline:
             raise ValueError(f"fit() needs the target column {TARGET!r}")
 
         self._fit_imputation(frame)
-        frame = self._apply_imputation(frame)
 
+        # Imputation is not applied here: none of the columns fitted below are
+        # imputable, so the fill would be discarded work.
         coords = np.vstack(
             [
                 frame[["pickup_latitude", "pickup_longitude"]].to_numpy(dtype=float),
@@ -236,34 +238,53 @@ class FeaturePipeline:
             },
         }
 
-    def _apply_imputation(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Fill repairable gaps using the persisted training-time values."""
+    def _apply_imputation(self, frame: pd.DataFrame) -> dict[str, np.ndarray]:
+        """Fill repairable gaps using the persisted training-time values.
+
+        Returns only the imputed columns rather than a copy of the whole frame: the
+        other 8 input columns are read unchanged, and copying them per request was
+        pure overhead.
+        """
         if not self.imputation:
             raise FeaturePipelineNotFitted("Imputation values have not been fitted")
 
-        frame = frame.copy()
         month = pd.to_datetime(frame["pickup_datetime"]).dt.month.astype(str)
 
         weather_cfg = self.imputation["weather_condition"]
-        frame["weather_condition"] = frame["weather_condition"].fillna(
-            month.map(weather_cfg["by_month"]).fillna(weather_cfg["global"])
+        weather = (
+            frame["weather_condition"]
+            .astype("object")
+            .fillna(month.map(weather_cfg["by_month"]).fillna(weather_cfg["global"]))
         )
 
+        # A request carrying an explicit null arrives as an object column, so these are
+        # coerced before filling; without it the fill value lands in an object series
+        # and every downstream numeric comparison silently changes behaviour.
         numeric_cfg = self.imputation["numeric"]
+        imputed: dict[str, np.ndarray] = {"weather_condition": weather.to_numpy()}
         for column in IMPUTABLE_NUMERIC:
             fallback = numeric_cfg["global"][column]
-            frame[column] = frame[column].fillna(
-                month.map(numeric_cfg["by_month"][column]).fillna(fallback)
+            imputed[column] = (
+                pd.to_numeric(frame[column], errors="coerce")
+                .fillna(month.map(numeric_cfg["by_month"][column]).fillna(fallback))
+                .to_numpy(dtype=float)
             )
 
-        frame["passenger_count"] = frame["passenger_count"].fillna(
-            self.imputation["passenger_count"]["global"]
+        imputed["passenger_count"] = (
+            pd.to_numeric(frame["passenger_count"], errors="coerce")
+            .fillna(self.imputation["passenger_count"]["global"])
+            .to_numpy(dtype=float)
         )
-        return frame
+        return imputed
 
     # ------------------------------------------------------------- transform
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Build the model-ready feature matrix in the canonical column order."""
+        """Build the model-ready feature matrix in the canonical column order.
+
+        Columns are accumulated in a plain dict of arrays and the DataFrame is built
+        once. Assigning 49 columns onto a live frame instead cost a block-manager
+        insert apiece, which was 44% of serving latency and did no useful work.
+        """
         if self.zone_centroids is None:
             raise FeaturePipelineNotFitted("Call fit() or load() before transform()")
         self._require_columns(frame)
@@ -272,9 +293,9 @@ class FeaturePipeline:
         # and the indicator is what makes "indicator + fill" safe (M2 Table 2.3).
         weather_missing = frame["weather_condition"].isna().to_numpy().astype(float)
         passenger_missing = frame["passenger_count"].isna().to_numpy().astype(float)
-        frame = self._apply_imputation(frame)
+        imputed = self._apply_imputation(frame)
 
-        out = pd.DataFrame(index=frame.index)
+        out: dict[str, np.ndarray] = {}
         pickup_dt = pd.to_datetime(frame["pickup_datetime"])
 
         p_lat = frame["pickup_latitude"].to_numpy(dtype=float)
@@ -282,7 +303,8 @@ class FeaturePipeline:
         d_lat = frame["dropoff_latitude"].to_numpy(dtype=float)
         d_lon = frame["dropoff_longitude"].to_numpy(dtype=float)
 
-        out["haversine_km"] = haversine_km(p_lat, p_lon, d_lat, d_lon)
+        distance = haversine_km(p_lat, p_lon, d_lat, d_lon)
+        out["haversine_km"] = distance
         out["manhattan_km"] = manhattan_km(p_lat, p_lon, d_lat, d_lon)
         bearing = np.radians(bearing_deg(p_lat, p_lon, d_lat, d_lon))
         out["bearing_sin"] = np.sin(bearing)
@@ -310,22 +332,24 @@ class FeaturePipeline:
         out["is_night"] = ((hour >= 22) | (hour < 5)).astype(float)
         out["is_holiday"] = is_holiday(pickup_dt).astype(float)
 
-        weather = frame["weather_condition"].astype("object")
+        weather_values = imputed["weather_condition"]
         out["traffic_index"] = frame["traffic_index"].to_numpy(dtype=float)
-        out["temperature_c"] = frame["temperature_c"].to_numpy(dtype=float)
-        out["precipitation_mm"] = frame["precipitation_mm"].to_numpy(dtype=float)
-        out["wind_kph"] = frame["wind_kph"].to_numpy(dtype=float)
-        out["weather_severity"] = weather.map(WEATHER_SEVERITY).fillna(0.0).to_numpy(dtype=float)
+        out["temperature_c"] = imputed["temperature_c"]
+        out["precipitation_mm"] = imputed["precipitation_mm"]
+        out["wind_kph"] = imputed["wind_kph"]
+        out["weather_severity"] = np.array(
+            [WEATHER_SEVERITY.get(value, 0.0) for value in weather_values], dtype=float
+        )
         for category in WEATHER_CATEGORIES:
-            out[f"weather_{category}"] = (weather == category).to_numpy().astype(float)
+            out[f"weather_{category}"] = (weather_values == category).astype(float)
 
-        out["passenger_count"] = frame["passenger_count"].to_numpy(dtype=float)
+        out["passenger_count"] = imputed["passenger_count"]
         vendor = frame["vendor_id"].to_numpy()
         for category in VENDOR_CATEGORIES:
             out[f"vendor_{category}"] = (vendor == category).astype(float)
         out["store_and_fwd"] = (
-            frame["store_and_fwd_flag"].astype("object").fillna("N").eq("Y").to_numpy().astype(float)
-        )
+            frame["store_and_fwd_flag"].astype("object").fillna("N").to_numpy() == "Y"
+        ).astype(float)
         out["weather_imputed"] = weather_missing
         out["passenger_count_imputed"] = passenger_missing
 
@@ -341,21 +365,18 @@ class FeaturePipeline:
         keys = pd.DataFrame(
             {"pickup_zone": pickup_zone, "dropoff_zone": dropoff_zone, "hour": hour}
         )
-        out["zone_hour_speed_prior"] = self._lookup(
-            keys, self.zone_hour_speed, ["pickup_zone", "hour"]
-        )
-        out["route_speed_prior"] = self._lookup(
-            keys, self.route_speed, ["pickup_zone", "dropoff_zone"]
-        )
+        zone_hour_prior = self._lookup(keys, self.zone_hour_speed, ["pickup_zone", "hour"])
+        route_prior = self._lookup(keys, self.route_speed, ["pickup_zone", "dropoff_zone"])
+        out["zone_hour_speed_prior"] = zone_hour_prior
+        out["route_speed_prior"] = route_prior
 
-        distance = out["haversine_km"].to_numpy()
-        out["expected_duration_zone_hour"] = (
-            distance / out["zone_hour_speed_prior"].to_numpy() * 60.0
-        )
-        out["expected_duration_route"] = distance / out["route_speed_prior"].to_numpy() * 60.0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out["expected_duration_zone_hour"] = distance / zone_hour_prior * 60.0
+            out["expected_duration_route"] = distance / route_prior * 60.0
 
-        result = out.reindex(columns=list(FEATURE_COLUMNS))
-        return result.astype("float64").replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        matrix = np.column_stack([out[column] for column in FEATURE_COLUMNS]).astype("float64")
+        matrix[~np.isfinite(matrix)] = 0.0
+        return pd.DataFrame(matrix, columns=list(FEATURE_COLUMNS), index=frame.index)
 
     def fit_transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         return self.fit(frame).transform(frame)
@@ -386,17 +407,39 @@ class FeaturePipeline:
         return distances.argmin(axis=1)
 
     def _lookup(self, keys: pd.DataFrame, table: pd.DataFrame, on: list[str]) -> np.ndarray:
-        """Join a learned prior, falling back zone-level then global for unseen keys."""
-        merged = keys.merge(table, on=on, how="left")
-        speed = merged["speed"].to_numpy(dtype=float)
-        zone_fallback = (
-            keys[["pickup_zone"]]
-            .merge(self.zone_speed, on="pickup_zone", how="left")["speed"]
-            .to_numpy(dtype=float)
+        """Join a learned prior, falling back zone-level then global for unseen keys.
+
+        Indexed reindex rather than a merge: a merge costs milliseconds of fixed
+        overhead regardless of size, which dominated single-request serving latency
+        while doing almost no work.
+        """
+        index = (
+            pd.MultiIndex.from_arrays([keys[column].to_numpy() for column in on])
+            if len(on) > 1
+            else pd.Index(keys[on[0]].to_numpy())
         )
-        speed = np.where(np.isnan(speed), zone_fallback, speed)
-        speed = np.where(np.isnan(speed), self.global_speed, speed)
+        lookup = self._indexed(table, on)
+        speed = lookup.reindex(index).to_numpy(dtype=float)
+
+        missing = np.isnan(speed)
+        if missing.any():
+            zone_lookup = self._indexed(self.zone_speed, ["pickup_zone"])
+            zone_fallback = zone_lookup.reindex(
+                pd.Index(keys["pickup_zone"].to_numpy())
+            ).to_numpy(dtype=float)
+            speed = np.where(missing, zone_fallback, speed)
+            speed = np.where(np.isnan(speed), self.global_speed, speed)
+
         return np.clip(speed, 1.0, 120.0)
+
+    def _indexed(self, table: pd.DataFrame, on: list[str]) -> pd.Series:
+        """Cache the key-indexed view of a prior table; rebuilt only when it changes."""
+        cache_key = id(table), tuple(on)
+        cached = self._lookup_cache.get(cache_key)
+        if cached is None:
+            cached = table.set_index(on)["speed"]
+            self._lookup_cache[cache_key] = cached
+        return cached
 
     # ------------------------------------------------------------ persistence
     def save(self, directory: str | Path) -> Path:
