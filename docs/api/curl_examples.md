@@ -247,12 +247,27 @@ curl -s http://localhost:8000/metrics | grep eta_
 ## Container
 
 ```powershell
-podman build -t eta-api:latest -f Containerfile .
-podman run --rm -p 8000:8000 eta-api:latest
+podman build --format docker -t eta-api:latest -f Containerfile .
 
-# or
+# Preferred: compose declares the healthcheck explicitly
 podman-compose up --build
+
+# Plain run - the healthcheck must be passed explicitly, see note below
+podman run --rm -p 8000:8000 `
+  --health-cmd "curl -fsS http://localhost:8000/ready || exit 1" `
+  --health-interval 30s --health-start-period 40s --health-retries 3 `
+  eta-api:latest
 ```
+
+Two Podman quirks worth knowing:
+
+- `--format docker` is required at build time. Podman defaults to the OCI image
+  format, which has no HEALTHCHECK field, so the instruction is discarded with only a
+  warning.
+- Even with the healthcheck recorded in the image, `podman run` does not inherit it —
+  the container reports `starting` forever. `podman-compose` declares it explicitly and
+  works; a plain run needs `--health-cmd`. Verified: with it, the container reports
+  `healthy` within 15s.
 
 ## Benchmark
 

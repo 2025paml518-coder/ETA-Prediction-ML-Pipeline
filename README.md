@@ -239,8 +239,17 @@ each dataset consumed, so a run identifies the exact code and data behind it.
 
 ```powershell
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000    # docs at /docs
-podman build -t eta-api:latest -f Containerfile .      # or: podman-compose up --build
+podman build --format docker -t eta-api:latest -f Containerfile .
+podman-compose up --build                              # serves on :8000
 ```
+
+The image is **1.01 GB** and ships a 0.58 MB standalone model export. The first build
+came out at 1.39 GB because the Containerfile copied `mlruns/` — 640 MB of every
+candidate from every training run, to serve one model — and installed the full
+`requirements.txt` including DVC, pytest, ruff, Streamlit and Plotly, none of which are
+reachable from the request path. Verified: the containerised service returns
+**exactly the same prediction** as the local one, confirming the export path is
+equivalent to loading from the registry.
 
 | Endpoint | Purpose |
 | --- | --- |

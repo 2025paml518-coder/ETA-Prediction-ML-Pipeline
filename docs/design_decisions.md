@@ -631,6 +631,35 @@ versioned artefact that runs with no network, which is what makes the deployment
 reproducible. The trade-off is that promoting a model requires a rebuild; the volume
 mount in `compose.yaml` is the escape hatch when that matters.
 
+**Two things the first build exposed.**
+
+The image came out at **1.39 GB**. Two causes, both invisible until it was actually
+built rather than merely written:
+
+1. The Containerfile copied `mlruns/` wholesale. That directory holds every candidate
+   model from every training run and had grown to **640 MB** to serve one model.
+   Training now exports the selected estimator to `models/trained/model/` (0.58 MB),
+   the predictor falls back to it when no tracking store is present, and a
+   `.containerignore` keeps the tracking store, datasets and DVC cache out of the
+   build context entirely.
+2. It installed the full `requirements.txt`, which carries DVC, pytest, ruff,
+   Streamlit, Plotly and matplotlib. None are reachable from the request path, and each
+   is both weight and attack surface in a running service. `requirements-serving.txt`
+   installs only what inference needs.
+
+Podman also warned that **`HEALTHCHECK is not supported for OCI image format and will
+be ignored`**. Podman defaults to the OCI format, which has no healthcheck field, so
+the instruction was being silently discarded - the image would have shipped with a
+healthcheck that never ran. Building with `--format docker` records it correctly.
+
+Chasing that further turned up a second layer to the same problem: even once the image
+carries the healthcheck, `podman run` does **not** inherit it, and the container sits
+at `starting` indefinitely. `podman-compose` declares the check explicitly and works,
+and a plain run reports `healthy` within 15 seconds once `--health-cmd` is passed. The
+underlying probe was never at fault - `curl /ready` inside the container returns 200 -
+which is exactly why the failure was worth chasing rather than assuming a green build
+meant a working healthcheck.
+
 ---
 
 ## M2 requirement coverage
