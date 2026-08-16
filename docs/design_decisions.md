@@ -474,6 +474,165 @@ the evidence is worse than no report, because it is presented as evidence.
 
 ---
 
+## Week 3 — M4: Model Packaging, Deployment & Serving
+
+### D22. Liveness and readiness are separate endpoints
+
+**Decision.** `/health` answers whenever the process is up and deliberately does not
+touch the model. `/ready` returns 503 until both the model and the feature pipeline
+have loaded, and reports which of the two is missing.
+
+**Why.** Conflating them breaks in both directions. If the single probe checks the
+model, an orchestrator will kill and restart a perfectly healthy process because a
+model artefact is missing — which restarting will not fix. If it only checks the
+process, traffic gets routed to a container that cannot serve. The container
+healthcheck polls `/ready`, because a running process with no model is not useful.
+
+---
+
+### D23. Validation at the edge mirrors the training-time contract
+
+**Decision.** Pydantic bounds are read from the same `validate.bounds` block in
+params.yaml that the ingestion stage uses, `extra="forbid"` rejects unknown fields,
+and two Level 4 business rules from Week 1 are re-enforced on the request.
+
+**Why the same bounds.** If serving accepts a latitude that training would have
+quarantined, the model is being asked about a region it never saw. Accepting rows
+training would have discarded is a form of training-serving skew, so the two
+boundaries are driven from one configuration block rather than being written twice.
+
+**Why `extra="forbid"`.** A caller who sends `trafic_index` instead of `traffic_index`
+otherwise gets a silently defaulted feature and a confident, wrong ETA. The typo is
+reported as a 422 instead.
+
+**Why business rules again at the edge.** `BR_PRECIPITATION_WITHOUT_WET_WEATHER` and
+the partial-weather rule catch a caller whose own weather lookup half-failed. Imputing
+those gaps would hide a broken upstream integration behind a plausible number — the
+silent failure M2 opens with.
+
+**Why weather is optional but all-or-nothing.** The feature pipeline carries
+imputation values learned from the training partition, so a caller with no weather
+feed still gets a prediction, and the response says `weather_imputed: true` rather
+than pretending the input was complete. A *partial* record is different: it signals a
+malfunction rather than an absence.
+
+---
+
+### D24. The model is resolved from the registry, with a run fallback
+
+**Decision.** The service loads the highest version of `eta-predictor` from the MLflow
+Model Registry, falling back to the best run's artefact when no registry is reachable.
+
+**Why the registry.** It gives the service a stable name to resolve instead of a
+filesystem path to a pickle. That is what lets the Week 4 retraining trigger promote a
+new version without rebuilding or redeploying the container.
+
+**Why a fallback.** A container that cannot start without a reachable tracking server
+is harder to demonstrate and harder to debug. The fallback keeps the image runnable
+in isolation.
+
+**Artefacts load once, at startup.** Loading per request would put tens of
+milliseconds of deserialisation into every call. A warm-up prediction is issued during
+startup so the first real request does not absorb lazy initialisation.
+
+---
+
+### D25. Every prediction is logged before Week 4 needs it
+
+**Decision.** Served predictions go to SQLite with their features, model version and
+latency; `/feedback` attaches the observed duration to the original row by request id.
+
+**Why now rather than in Week 4.** Monitoring cannot be retrofitted onto traffic that
+was never recorded. Building the log with the API means Week 4 starts with history
+instead of an empty table.
+
+**Why SQLite over JSONL.** The monitoring job queries by time window and joins
+predictions to outcomes. Doing that over log lines is a worse reimplementation of a
+database, and SQLite adds no service to the container.
+
+**Why `/feedback` exists at all.** Without observed durations the service can only
+watch its *inputs* drift. Actual outcomes are what turn drift detection into error
+measurement, and they are what the Week 4 retraining trigger thresholds on.
+
+**Logging never fails a request.** Write errors are logged and swallowed: a monitoring
+outage must not become a serving outage.
+
+---
+
+### D26. Latency is reported as percentiles
+
+**Decision.** `/metrics` exposes a Prometheus histogram, and `scripts/loadtest.py`
+reports p50/p90/p95/p99 for single requests plus per-trip cost across batch sizes.
+
+**Why not the mean.** The average latency of a service describes nobody's experience.
+A caller with a timeout meets the tail, so p95 and p99 are the numbers that decide
+whether the service is usable.
+
+**Why measure batching separately.** `/predict/batch` featurises once and makes one
+vectorised model call, so per-trip cost falls sharply with payload size. That gap is
+the entire justification for the endpoint, and quoting a single latency figure would
+conceal it.
+
+**What measuring actually found.** The first benchmark returned 16.5 req/s at a p50 of
+936ms, which is unusable. Profiling rather than guessing located the cost:
+
+| Component | Before | After |
+| --- | --- | --- |
+| Feature transform | 20.5 ms | 5.9 ms |
+| Prediction logging | 5.8 ms | 0.13 ms |
+| Model inference | 3.7 ms | 1.8 ms |
+
+Three findings, none of which were the obvious suspect:
+
+1. `transform` assigned 49 columns onto a live DataFrame one at a time. Each
+   assignment triggers a pandas block-manager insert, which reallocates; together they
+   were 44% of serving latency while doing no arithmetic. Accumulating into a dict of
+   arrays and constructing the frame once removed it. My first guess had been the
+   four `merge` calls, which turned out to cost almost nothing — replacing them with
+   indexed lookups moved the number by 1ms.
+2. `_apply_imputation` deep-copied the entire request frame to fill five columns.
+   It now returns only the imputed arrays.
+3. The prediction log opened and closed a SQLite connection per request, and adding
+   WAL pragmas made it *worse* because they then ran on every connect. A thread-local
+   connection with the pragmas applied once took it from 5.8ms to 0.13ms.
+
+End to end this took throughput from 16.5 to 45.5 req/s and p99 from 1508ms to 742ms.
+The optimised transform was verified to reproduce the committed feature tables
+bit-for-bit across all 145,000 rows, so no retraining was required — it is a pure
+speed change, not a behaviour change.
+
+**What remains.** At concurrency 16 the p50 of 332ms is dominated by queueing, not
+work: the server handles ~22ms per request, and 16 in flight means most of the wait is
+queue time. FastAPI runs synchronous endpoints in a threadpool, so CPU-bound
+featurisation is serialised by the GIL regardless of thread count. Real concurrency
+comes from more Uvicorn workers, each holding its own copy of the model — which is why
+the report states these are single-worker figures rather than presenting them as a
+ceiling.
+
+---
+
+### D27. Multi-stage container, non-root, model baked in
+
+**Decision.** A builder stage installs into a virtualenv; the runtime copies only that
+venv plus the application and artefacts, and runs as uid 10001.
+
+**Why multi-stage.** `build-essential` is needed to install the dependencies and is a
+liability in a shipped image. Copying just the virtualenv leaves compilers and headers
+behind.
+
+**Why non-root.** A compromise of the service should not also be root inside the
+container. It costs one `useradd`.
+
+**Why dependencies are copied before source.** Editing application code would
+otherwise invalidate the slow dependency layer on every rebuild.
+
+**Why the model is baked in rather than fetched at start.** The image becomes a single
+versioned artefact that runs with no network, which is what makes the deployment
+reproducible. The trade-off is that promoting a model requires a rebuild; the volume
+mount in `compose.yaml` is the escape hatch when that matters.
+
+---
+
 ## M2 requirement coverage
 
 | M2 section | Requirement | Where |

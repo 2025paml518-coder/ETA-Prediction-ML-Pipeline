@@ -1,0 +1,347 @@
+{
+  "info": {
+    "name": "ETA Prediction API",
+    "description": "Week 3 (M4) deliverable. Set {{base_url}} in the collection variables. Run 'Predict - single trip' first: it captures request_id into a collection variable that the feedback request reuses.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "request_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Operations",
+      "item": [
+        {
+          "name": "Health (liveness)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('reports ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ready (readiness)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/ready", "host": ["{{base_url}}"], "path": ["ready"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('model is loaded', () => pm.response.to.have.status(200));",
+                  "pm.test('both artefacts present', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.model_loaded).to.be.true;",
+                  "  pm.expect(b.feature_pipeline_loaded).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Model info",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/model/info", "host": ["{{base_url}}"], "path": ["model", "info"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('selected on validation, not test', () => {",
+                  "  pm.expect(pm.response.json().selected_by).to.eql('val_mae');",
+                  "});",
+                  "pm.test('feature contract is exposed', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.feature_columns.length).to.eql(b.feature_count);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metrics (Prometheus)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/metrics", "host": ["{{base_url}}"], "path": ["metrics"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inference",
+      "item": [
+        {
+          "name": "Predict - single trip",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-07-15T08:30:00\",\n  \"pickup_latitude\": 40.7549,\n  \"pickup_longitude\": -73.9840,\n  \"dropoff_latitude\": 40.6413,\n  \"dropoff_longitude\": -73.7781,\n  \"traffic_index\": 0.62,\n  \"vendor_id\": 1,\n  \"passenger_count\": 2,\n  \"store_and_fwd_flag\": \"N\",\n  \"weather_condition\": \"Clear\",\n  \"temperature_c\": 24.5,\n  \"precipitation_mm\": 0.0,\n  \"wind_kph\": 12.0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('request_id', body.request_id);",
+                  "pm.test('ETA is plausible', () => {",
+                  "  pm.expect(body.predicted_duration_min).to.be.above(1);",
+                  "  pm.expect(body.predicted_duration_min).to.be.below(300);",
+                  "});",
+                  "pm.test('weather was not imputed', () => pm.expect(body.weather_imputed).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict - weather omitted (imputed)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-11-02T18:15:00\",\n  \"pickup_latitude\": 40.7075,\n  \"pickup_longitude\": -74.0113,\n  \"dropoff_latitude\": 40.7736,\n  \"dropoff_longitude\": -73.9566,\n  \"traffic_index\": 0.85\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('imputation is disclosed', () => {",
+                  "  pm.expect(pm.response.json().weather_imputed).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict - batch",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict/batch", "host": ["{{base_url}}"], "path": ["predict", "batch"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trips\": [\n    {\n      \"pickup_datetime\": \"2024-07-15T08:30:00\",\n      \"pickup_latitude\": 40.7549,\n      \"pickup_longitude\": -73.9840,\n      \"dropoff_latitude\": 40.6413,\n      \"dropoff_longitude\": -73.7781,\n      \"traffic_index\": 0.62\n    },\n    {\n      \"pickup_datetime\": \"2024-07-15T23:10:00\",\n      \"pickup_latitude\": 40.6928,\n      \"pickup_longitude\": -73.9903,\n      \"dropoff_latitude\": 40.8116,\n      \"dropoff_longitude\": -73.9465,\n      \"traffic_index\": 0.15\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('one prediction per trip', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.count).to.eql(2);",
+                  "  pm.expect(b.predictions.length).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Monitoring",
+      "item": [
+        {
+          "name": "Feedback - report actual duration",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/feedback", "host": ["{{base_url}}"], "path": ["feedback"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{request_id}}\",\n  \"actual_duration_min\": 41.5\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('joined to the original prediction', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.recorded).to.be.true;",
+                  "  pm.expect(b.absolute_error_min).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Feedback - unknown request id (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/feedback", "host": ["{{base_url}}"], "path": ["feedback"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"does-not-exist\",\n  \"actual_duration_min\": 10.0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error handling",
+      "item": [
+        {
+          "name": "422 - latitude out of range",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-07-15T08:30:00\",\n  \"pickup_latitude\": 91.0,\n  \"pickup_longitude\": -73.9840,\n  \"dropoff_latitude\": 40.6413,\n  \"dropoff_longitude\": -73.7781,\n  \"traffic_index\": 0.62\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+                  "pm.test('names the offending field', () => {",
+                  "  const fields = pm.response.json().errors.map(e => e.field);",
+                  "  pm.expect(fields).to.include('pickup_latitude');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - rain under a clear sky",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-07-15T08:30:00\",\n  \"pickup_latitude\": 40.7549,\n  \"pickup_longitude\": -73.9840,\n  \"dropoff_latitude\": 40.6413,\n  \"dropoff_longitude\": -73.7781,\n  \"traffic_index\": 0.62,\n  \"weather_condition\": \"Clear\",\n  \"temperature_c\": 20.0,\n  \"precipitation_mm\": 8.0,\n  \"wind_kph\": 10.0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('422 Unprocessable', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - half-supplied weather",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-07-15T08:30:00\",\n  \"pickup_latitude\": 40.7549,\n  \"pickup_longitude\": -73.9840,\n  \"dropoff_latitude\": 40.6413,\n  \"dropoff_longitude\": -73.7781,\n  \"traffic_index\": 0.62,\n  \"weather_condition\": \"Rain\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('422 Unprocessable', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - unknown field (typo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_datetime\": \"2024-07-15T08:30:00\",\n  \"pickup_latitude\": 40.7549,\n  \"pickup_longitude\": -73.9840,\n  \"dropoff_latitude\": 40.6413,\n  \"dropoff_longitude\": -73.7781,\n  \"trafic_index\": 0.62\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('typo is not silently ignored', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - empty body",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/predict", "host": ["{{base_url}}"], "path": ["predict"] },
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('422 Unprocessable', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
