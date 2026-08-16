@@ -33,7 +33,7 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 583e1f2e1a96df9f0a121691f9b42056
+      md5: 1aec1c8e031ae930c99dcc864c6ca939
       size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
@@ -141,7 +141,7 @@ stages:
       size: 480095
     - path: reports/validation
       hash: md5
-      md5: 24b674e1ec1ecb4c567d2891c41bff68.dir
+      md5: a760428355b3853b6c6c60783b3befe1.dir
       size: 6888
       nfiles: 3
   split:
@@ -325,8 +325,8 @@ stages:
       size: 15078
     - path: src/utils/lineage.py
       hash: md5
-      md5: a8d85dd353b74f1a66693dc3581143c7
-      size: 2609
+      md5: c67cc66d22bccf531e2340959b18b019
+      size: 3117
     params:
       params.yaml:
         seed: 42
@@ -356,19 +356,19 @@ stages:
     outs:
     - path: models/trained
       hash: md5
-      md5: fc4a9b86474590ce3705506edecfe923.dir
-      size: 1953
+      md5: 15c65a89f65fab51a88d56bdd2afcd29.dir
+      size: 1986
       nfiles: 1
     - path: reports/metrics.json
       hash: md5
-      md5: d795e9734194602383a57bd93b65d7c2
+      md5: af7221a67e675e0c5b6257925c283c52
       size: 650
     - path: reports/model_comparison.md
       hash: md5
-      md5: 92d2bbe997ff64e0ce384013cc520f43
+      md5: 52c28d4ad340e50447e86fabd06df77f
       size: 2742
     - path: reports/training
       hash: md5
-      md5: 1980b5a663922ec67c5f07b10a0e3ff1.dir
-      size: 546867
+      md5: f0151b280c8b633dafb764ed4d123d74.dir
+      size: 546870
       nfiles: 8

@@ -1,10 +1,10 @@
 [
   {
     "model_type": "baseline",
-    "run_id": "90671be87c0a481a9c5f1d1e35d25ca2",
+    "run_id": "428ef59d49954206a2f2861624aa7dcb",
     "params": {},
     "cv_mae": null,
-    "fit_seconds": 0.083,
+    "fit_seconds": 0.079,
     "metrics": {
       "train": {
         "mae": 12.0295,
@@ -12,7 +12,7 @@
         "r2": -0.0743,
         "mape": 66.7639,
         "p90_abs_error": 27.6782,
-        "predict_ms_per_1k": 0.0812
+        "predict_ms_per_1k": 0.0528
       },
       "val": {
         "mae": 11.9042,
@@ -20,7 +20,7 @@
         "r2": -0.0687,
         "mape": 67.3884,
         "p90_abs_error": 27.2227,
-        "predict_ms_per_1k": 0.1288
+        "predict_ms_per_1k": 0.0955
       },
       "test": {
         "mae": 12.1366,
@@ -28,19 +28,19 @@
         "r2": -0.0817,
         "mape": 65.0795,
         "p90_abs_error": 28.5594,
-        "predict_ms_per_1k": 0.106
+        "predict_ms_per_1k": 0.0899
       }
     }
   },
   {
     "model_type": "ridge",
-    "run_id": "235ab76a79fe4aa1a34bd8afd083ebeb",
+    "run_id": "32068f0f70514b9e9fb4eb8ef39e617a",
     "params": {
       "model__solver": "cholesky",
       "model__alpha": 10.0
     },
     "cv_mae": 3.8763304905255134,
-    "fit_seconds": 9.797,
+    "fit_seconds": 9.219,
     "metrics": {
       "train": {
         "mae": 3.8937,
@@ -48,7 +48,7 @@
         "r2": 0.8834,
         "mape": 18.9317,
         "p90_abs_error": 8.4982,
-        "predict_ms_per_1k": 0.3677
+        "predict_ms_per_1k": 0.3245
       },
       "val": {
         "mae": 3.8282,
@@ -56,7 +56,7 @@
         "r2": 0.884,
         "mape": 18.7224,
         "p90_abs_error": 8.2057,
-        "predict_ms_per_1k": 0.4864
+        "predict_ms_per_1k": 0.4084
       },
       "test": {
         "mae": 3.9513,
@@ -64,13 +64,13 @@
         "r2": 0.882,
         "mape": 18.9773,
         "p90_abs_error": 8.5964,
-        "predict_ms_per_1k": 0.54
+        "predict_ms_per_1k": 0.4318
       }
     }
   },
   {
     "model_type": "random_forest",
-    "run_id": "075ab3ac16ac46a39dc800592cc57c5f",
+    "run_id": "d5cfc20690174129a3f015c788fe168d",
     "params": {
       "n_estimators": 300,
       "min_samples_split": 10,
@@ -79,7 +79,7 @@
       "max_depth": 15
     },
     "cv_mae": 3.5567220773781543,
-    "fit_seconds": 216.085,
+    "fit_seconds": 228.245,
     "metrics": {
       "train": {
         "mae": 2.6108,
@@ -87,7 +87,7 @@
         "r2": 0.9485,
         "mape": 11.6801,
         "p90_abs_error": 5.9285,
-        "predict_ms_per_1k": 7.9609
+        "predict_ms_per_1k": 7.321
       },
       "val": {
         "mae": 3.5091,
@@ -95,7 +95,7 @@
         "r2": 0.8982,
         "mape": 15.2812,
         "p90_abs_error": 7.9664,
-        "predict_ms_per_1k": 12.137
+        "predict_ms_per_1k": 10.5435
       },
       "test": {
         "mae": 3.5956,
@@ -103,13 +103,13 @@
         "r2": 0.8977,
         "mape": 15.3267,
         "p90_abs_error": 8.2517,
-        "predict_ms_per_1k": 12.0954
+        "predict_ms_per_1k": 10.6586
       }
     }
   },
   {
     "model_type": "lightgbm",
-    "run_id": "03a52cb517ab465395764a1724da0cdc",
+    "run_id": "b3ecd58ca26d4e828193c1e5985e9bfa",
     "params": {
       "subsample": 1.0,
       "num_leaves": 31,
@@ -120,7 +120,7 @@
       "colsample_bytree": 0.85
     },
     "cv_mae": 3.5249770442559014,
-    "fit_seconds": 156.891,
+    "fit_seconds": 181.668,
     "metrics": {
       "train": {
         "mae": 3.3924,
@@ -128,7 +128,7 @@
         "r2": 0.9115,
         "mape": 14.9728,
         "p90_abs_error": 7.8068,
-        "predict_ms_per_1k": 2.1349
+        "predict_ms_per_1k": 2.0417
       },
       "val": {
         "mae": 3.4741,
@@ -136,7 +136,7 @@
         "r2": 0.9007,
         "mape": 15.2049,
         "p90_abs_error": 7.9651,
-        "predict_ms_per_1k": 2.4253
+        "predict_ms_per_1k": 2.6912
       },
       "test": {
         "mae": 3.5646,
@@ -144,7 +144,7 @@
         "r2": 0.8992,
         "mape": 15.252,
         "p90_abs_error": 8.2183,
-        "predict_ms_per_1k": 2.7887
+        "predict_ms_per_1k": 2.8167
       }
     }
   }
