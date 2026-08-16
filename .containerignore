@@ -1,0 +1,25 @@
+# Build context exclusions. The tracking store, datasets and caches must never be
+# sent to the build daemon: mlruns alone is several hundred megabytes and the image
+# ships a standalone model export instead.
+mlruns/
+mlartifacts/
+data/
+.dvcremote/
+.dvc/cache/
+.dvc/tmp/
+.venv/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+monitoring/data/
+reports/
+notebooks/
+ui/
+tests/
+docs/
+*.md
+!README.md

@@ -45,11 +45,11 @@ WORKDIR /app
 COPY src/ ./src/
 COPY params.yaml ./
 
-# Model and feature artefacts. These are DVC-tracked, so `dvc pull` must run before
-# building, or they can be mounted at runtime instead.
+# Model and feature artefacts. models/trained/model is the standalone export of the
+# selected model; the mlruns tracking store is deliberately NOT copied, since it holds
+# every candidate from every run and is several hundred megabytes.
 COPY models/feature_pipeline/ ./models/feature_pipeline/
 COPY models/trained/ ./models/trained/
-COPY mlruns/ ./mlruns/
 
 RUN mkdir -p /app/monitoring/data && chown -R appuser:appuser /app
 USER appuser

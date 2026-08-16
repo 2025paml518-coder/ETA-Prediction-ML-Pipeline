@@ -95,6 +95,7 @@ class Predictor:
         cfg = self._params["train"]
         metadata = self._metadata()
         name = cfg["registered_model_name"]
+        models_root = project_path(self._params["paths"]["models"])
 
         tracking_dir = project_path(cfg["tracking_uri"])
         if tracking_dir.exists():
@@ -123,7 +124,7 @@ class Predictor:
                 logger.warning("Registry lookup failed (%s); falling back to run artefact", exc)
 
         run_id = metadata.get("best_run_id")
-        if run_id:
+        if run_id and tracking_dir.exists():
             mlflow.set_tracking_uri(tracking_dir.as_uri())
             model = mlflow.sklearn.load_model(f"runs:/{run_id}/model")
             return LoadedModel(
@@ -135,9 +136,22 @@ class Predictor:
                 metadata=metadata,
             )
 
+        # Standalone export. This is what the container ships: one model directory
+        # rather than the entire tracking store.
+        exported = models_root / "trained" / "model"
+        if exported.exists():
+            return LoadedModel(
+                model=mlflow.sklearn.load_model(str(exported)),
+                name=name,
+                version=f"exported-{(run_id or 'unknown')[:8]}",
+                source="local-export",
+                run_id=run_id,
+                metadata=metadata,
+            )
+
         raise FileNotFoundError(
-            "No model available: neither a registered version nor a run artefact was found. "
-            "Run `dvc repro train` first."
+            "No model available: no registered version, run artefact or standalone "
+            "export was found. Run `dvc repro train` first."
         )
 
     # ------------------------------------------------------------------ status

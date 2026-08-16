@@ -25,6 +25,7 @@ Three decisions here are deliberate and load-bearing:
 from __future__ import annotations
 
 import argparse
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -273,6 +274,7 @@ def train_candidate(
             "fit_seconds": round(fit_seconds, 3),
             "metrics": metrics,
             "feature_importance": importances,
+            "estimator": model,
         }
 
     logger.info(
@@ -325,6 +327,20 @@ def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
     best = select_best(results, params)
 
     models_dir = ensure_dir(f"{params['paths']['models']}/trained")
+
+    # The selected model is exported standalone so the serving image can ship one
+    # model instead of the whole tracking store, which is several hundred megabytes.
+    export_path = models_dir / "model"
+    if export_path.exists():
+        shutil.rmtree(export_path)
+    mlflow.sklearn.save_model(
+        sk_model=best["estimator"],
+        path=export_path,
+        signature=infer_signature(
+            data["train"][0].head(100), best["estimator"].predict(data["train"][0].head(100))
+        ),
+    )
+
     atomic_write_json(
         {
             "selected_by": f"{cfg['selection']['partition']}_{cfg['selection']['metric']}",
@@ -359,7 +375,7 @@ def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
 
     atomic_write_json(
         [
-            {k: v for k, v in r.items() if k != "feature_importance"}
+            {k: v for k, v in r.items() if k not in {"feature_importance", "estimator"}}
             for r in results
         ],
         artifact_root / "run_results.json",
