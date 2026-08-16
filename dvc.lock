@@ -33,19 +33,19 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 0d1672e44aa7a84583ed709b5ce08a0b
+      md5: 583e1f2e1a96df9f0a121691f9b42056
       size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: f9234ea5a07cb88e4fef3c34a982e024
-      size: 8444280
+      md5: 93980fe93bac3ae9f509288beac2df03
+      size: 8551601
   validate:
     cmd: python -m src.data.validate
     deps:
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: f9234ea5a07cb88e4fef3c34a982e024
-      size: 8444280
+      md5: 93980fe93bac3ae9f509288beac2df03
+      size: 8551601
     - path: src/data/quality.py
       hash: md5
       md5: f9bc127197299af06efdd5314f4baa86
@@ -133,15 +133,15 @@ stages:
     outs:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: be68cb6fdc37c13a5059984944e5a27a
-      size: 11094843
+      md5: 4deaaef0cdb7c1f33b632d3644e3f335
+      size: 11201860
     - path: data/quarantine/quarantined_trips.parquet
       hash: md5
-      md5: 536544aec279651f6a9df88c61ecf4c0
-      size: 479796
+      md5: 01d3c7f72421742d947c71767edc2ebc
+      size: 480095
     - path: reports/validation
       hash: md5
-      md5: e4afe067be9a8b2d12dec1c2f39cd539.dir
+      md5: 24b674e1ec1ecb4c567d2891c41bff68.dir
       size: 6888
       nfiles: 3
   split:
@@ -149,8 +149,8 @@ stages:
     deps:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: be68cb6fdc37c13a5059984944e5a27a
-      size: 11094843
+      md5: 4deaaef0cdb7c1f33b632d3644e3f335
+      size: 11201860
     - path: src/data/split.py
       hash: md5
       md5: ab09aee477704611d7f1b6081b38099d
@@ -172,31 +172,31 @@ stages:
       size: 455
     - path: data/interim/test.parquet
       hash: md5
-      md5: 3a97d8768835069eab583128335fd04a
-      size: 1913504
+      md5: dae5b7e2609d4df7255b0296450fdcce
+      size: 1913818
     - path: data/interim/train.parquet
       hash: md5
-      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
-      size: 8147307
+      md5: f922b73e40652bb1fd823a7524515f40
+      size: 8247803
     - path: data/interim/val.parquet
       hash: md5
-      md5: cd60bd7b4029871827f9b6fc3072c496
-      size: 1911459
+      md5: 81dfbeddf819bdbdd9281f8725f03eee
+      size: 1912135
   features:
     cmd: python -m src.features.make_features
     deps:
     - path: data/interim/test.parquet
       hash: md5
-      md5: 3a97d8768835069eab583128335fd04a
-      size: 1913504
+      md5: dae5b7e2609d4df7255b0296450fdcce
+      size: 1913818
     - path: data/interim/train.parquet
       hash: md5
-      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
-      size: 8147307
+      md5: f922b73e40652bb1fd823a7524515f40
+      size: 8247803
     - path: data/interim/val.parquet
       hash: md5
-      md5: cd60bd7b4029871827f9b6fc3072c496
-      size: 1911459
+      md5: 81dfbeddf819bdbdd9281f8725f03eee
+      size: 1912135
     - path: src/features/build_features.py
       hash: md5
       md5: 86530e7e86999aefa4324d0d44fd9954
@@ -236,16 +236,16 @@ stages:
     outs:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: 34e125b3e0d850829fa3ff8f66c967b8
-      size: 2919080
+      md5: 0c5f76dfbac0289f2abd3eb6d5e0af5c
+      size: 2916479
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: ad2ed24de9d566fd369f53314948407f
-      size: 12805214
+      md5: 78262fee9ff5d815da3b13771694d537
+      size: 12928642
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: 5fa45e983440b1e22f6c9acb184f33a3
-      size: 2916993
+      md5: c75eb867aa48845262a4025d5e2b6644
+      size: 2914720
     - path: models/feature_pipeline
       hash: md5
       md5: 572826fa2fd55199d3a253a6d3f8866f.dir
@@ -288,3 +288,87 @@ stages:
       md5: dbcefff63bd557b1b22ba4974f246ad5.dir
       size: 1596
       nfiles: 1
+  train:
+    cmd: python -m src.models.train
+    deps:
+    - path: data/processed/test_features.parquet
+      hash: md5
+      md5: 0c5f76dfbac0289f2abd3eb6d5e0af5c
+      size: 2916479
+    - path: data/processed/train_features.parquet
+      hash: md5
+      md5: 78262fee9ff5d815da3b13771694d537
+      size: 12928642
+    - path: data/processed/val_features.parquet
+      hash: md5
+      md5: c75eb867aa48845262a4025d5e2b6644
+      size: 2914720
+    - path: src/features/build_features.py
+      hash: md5
+      md5: 86530e7e86999aefa4324d0d44fd9954
+      size: 19757
+    - path: src/models/compare.py
+      hash: md5
+      md5: 5c788154abec3fc262e9c660fd439475
+      size: 6975
+    - path: src/models/evaluate.py
+      hash: md5
+      md5: 9d8e379c0a53ea9c797f99306014b593
+      size: 1757
+    - path: src/models/hyperparameters.py
+      hash: md5
+      md5: fa811ed5c22068f1e80ee029c7bd9f82
+      size: 1548
+    - path: src/models/train.py
+      hash: md5
+      md5: 9d47923c74faef0a249ec2e8e12e4486
+      size: 15078
+    - path: src/utils/lineage.py
+      hash: md5
+      md5: a8d85dd353b74f1a66693dc3581143c7
+      size: 2609
+    params:
+      params.yaml:
+        seed: 42
+        train:
+          experiment_name: eta-prediction
+          registered_model_name: eta-predictor
+          tracking_uri: mlruns
+          selection:
+            partition: val
+            metric: mae
+            lower_is_better: true
+          cv:
+            strategy: time_series
+            n_splits: 3
+          search:
+            scoring: neg_mean_absolute_error
+            random_state: 42
+            n_iter:
+              ridge: 12
+              random_forest: 8
+              lightgbm: 20
+          models:
+            baseline: true
+            ridge: true
+            random_forest: true
+            lightgbm: true
+    outs:
+    - path: models/trained
+      hash: md5
+      md5: fc4a9b86474590ce3705506edecfe923.dir
+      size: 1953
+      nfiles: 1
+    - path: reports/metrics.json
+      hash: md5
+      md5: d795e9734194602383a57bd93b65d7c2
+      size: 650
+    - path: reports/model_comparison.md
+      hash: md5
+      md5: 92d2bbe997ff64e0ce384013cc520f43
+      size: 2742
+    - path: reports/training
+      hash: md5
+      md5: 1980b5a663922ec67c5f07b10a0e3ff1.dir
+      size: 546867
+      nfiles: 8

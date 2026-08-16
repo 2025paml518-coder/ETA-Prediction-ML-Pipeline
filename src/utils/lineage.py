@@ -44,14 +44,23 @@ def git_branch() -> str:
 
 
 def git_is_dirty() -> bool:
-    """True when tracked files differ from HEAD.
+    """True when *tracked* files differ from HEAD.
 
-    A dirty tree means the commit hash alone does not identify the code that ran,
-    so the run is only partially reproducible. Recording it is more useful than
-    refusing to train.
+    Untracked files are excluded deliberately. Every training run writes reports and
+    model artefacts, so counting untracked paths would leave this flag permanently
+    true and therefore meaningless. What matters for reproducing a run is whether the
+    code under version control matched the recorded commit.
     """
-    status = _git("status", "--porcelain")
+    status = _git("status", "--porcelain", "--untracked-files=no")
     return bool(status) and status != UNKNOWN
+
+
+def git_untracked_count() -> int:
+    """How many untracked paths existed, recorded for context rather than as a verdict."""
+    status = _git("ls-files", "--others", "--exclude-standard")
+    if not status or status == UNKNOWN:
+        return 0
+    return len(status.splitlines())
 
 
 def dvc_output_hashes(paths: tuple[str, ...]) -> dict[str, str]:
@@ -80,6 +89,7 @@ def collect(data_paths: tuple[str, ...] = ()) -> dict[str, str]:
         "git_commit": git_commit(),
         "git_branch": git_branch(),
         "git_dirty": str(git_is_dirty()).lower(),
+        "git_untracked_files": str(git_untracked_count()),
     }
     for path, digest in dvc_output_hashes(data_paths).items():
         tags[f"data_md5.{Path(path).name}"] = digest
