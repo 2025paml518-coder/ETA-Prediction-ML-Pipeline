@@ -33,7 +33,7 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 1aec1c8e031ae930c99dcc864c6ca939
+      md5: 47d152ceb6c9bdc14debd433dd691e51
       size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
@@ -356,19 +356,19 @@ stages:
     outs:
     - path: models/trained
       hash: md5
-      md5: 7f02b0b778f943c91fecf1b5a3ee33c5.dir
+      md5: 4888c619908e38ab6467c4f7478cd597.dir
       size: 608073
       nfiles: 6
     - path: reports/metrics.json
       hash: md5
-      md5: 35d6bf01b6b8e4bac26d15b47f9c8578
+      md5: 118b49854a0194576ba29910b81f7ccc
       size: 650
     - path: reports/model_comparison.md
       hash: md5
-      md5: cd4b36ffb6b862559268dfd97b770f19
-      size: 2743
+      md5: 60c19cd145ad9939424cb5ad4168ee23
+      size: 2742
     - path: reports/training
       hash: md5
-      md5: 810d4c497db14664e07c0e6b441b1a84.dir
-      size: 546870
+      md5: 4189f334e426bdd97ff3b9e867738b55.dir
+      size: 546867
       nfiles: 8
