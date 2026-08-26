@@ -1,0 +1,38 @@
+# Self-hosted GitHub Actions runner (Podman-friendly)
+FROM ubuntu:22.04
+
+ARG RUNNER_VERSION=2.319.1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base packages the runner and typical jobs need
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        jq \
+        sudo \
+        tar \
+        libicu70 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user to run the agent (the runner refuses to configure as root)
+RUN useradd -m -s /bin/bash runner \
+    && usermod -aG sudo runner \
+    && echo "runner ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner
+
+WORKDIR /home/runner/actions-runner
+
+# Download and extract the runner release
+RUN curl -fsSL -o actions-runner.tar.gz \
+        "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+    && tar xzf actions-runner.tar.gz \
+    && rm actions-runner.tar.gz \
+    && ./bin/installdependencies.sh \
+    && chown -R runner:runner /home/runner
+
+COPY entrypoint.sh /home/runner/entrypoint.sh
+RUN chmod +x /home/runner/entrypoint.sh
+
+USER runner
+
+ENTRYPOINT ["/home/runner/entrypoint.sh"]
