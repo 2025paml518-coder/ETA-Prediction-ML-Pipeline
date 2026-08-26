@@ -19,7 +19,7 @@ import mlflow
 import pandas as pd
 from mlflow.tracking import MlflowClient
 
-from src.config import load_params, project_path
+from src.config import load_params, project_path, resolve_mlflow_tracking_uri
 from src.models.evaluate import calculate_metrics
 from src.models.hyperparameters import SEARCH_SPACES
 from src.models.train import PARTITIONS, TRACKED_DATA, build_estimator, split_xy
@@ -153,7 +153,7 @@ def main() -> None:
     args = parser.parse_args()
 
     params = load_params(args.params)
-    mlflow.set_tracking_uri(project_path(params["train"]["tracking_uri"]).as_uri())
+    mlflow.set_tracking_uri(resolve_mlflow_tracking_uri(params["train"]["tracking_uri"]))
 
     run_id = args.run_id
     if run_id is None:

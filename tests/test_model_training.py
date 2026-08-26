@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from src.config import load_params, project_path
 from src.features.build_features import FEATURE_COLUMNS, TARGET
 from src.models.evaluate import calculate_metrics, format_metrics
-from src.models.train import build_estimator, select_best, split_xy
+from src.models.train import build_estimator, enabled_models, select_best, split_xy
 
 PROCESSED = project_path("data/processed")
 
@@ -181,6 +181,19 @@ class TestTemporalDiscipline:
         assert y.std() > 1.0
         assert y.min() >= 1
         assert y.max() <= 300
+
+
+class TestCandidateSelection:
+    def test_missing_models_block_defaults_to_all_candidates(self):
+        params = copy.deepcopy(load_params())
+        params["train"].pop("models", None)
+
+        assert enabled_models(params["train"]) == [
+            "baseline",
+            "ridge",
+            "random_forest",
+            "lightgbm",
+        ]
 
 
 class TestTrainedArtifacts:

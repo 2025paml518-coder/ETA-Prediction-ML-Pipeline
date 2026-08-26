@@ -49,7 +49,7 @@ from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.config import ensure_dir, load_params, project_path
+from src.config import ensure_dir, load_params, project_path, resolve_mlflow_tracking_uri
 from src.features.build_features import FEATURE_COLUMNS, TARGET
 from src.models.evaluate import calculate_metrics, format_metrics
 from src.models.hyperparameters import SEARCH_SPACES
@@ -60,6 +60,12 @@ from src.utils.logging_utils import get_logger
 logger = get_logger(__name__)
 
 PARTITIONS = ("train", "val", "test")
+DEFAULT_MODELS = ("baseline", "ridge", "random_forest", "lightgbm")
+DEFAULT_SEARCH = {
+    "scoring": "neg_mean_absolute_error",
+    "random_state": 42,
+    "n_iter": {"ridge": 12, "random_forest": 8, "lightgbm": 20},
+}
 
 TRACKED_DATA = (
     "data/processed/train_features.parquet",
@@ -130,6 +136,7 @@ def fit_candidate(
 ) -> tuple[Any, dict, float | None]:
     """Fit one candidate, tuning it when it has a search space."""
     cfg = params["train"]
+    search_cfg = cfg.get("search", DEFAULT_SEARCH)
     estimator = build_estimator(name, seed)
 
     if name not in SEARCH_SPACES:
@@ -140,10 +147,12 @@ def fit_candidate(
     search = RandomizedSearchCV(
         estimator=estimator,
         param_distributions=SEARCH_SPACES[name],
-        n_iter=cfg["search"]["n_iter"][name],
+        n_iter=search_cfg.get("n_iter", DEFAULT_SEARCH["n_iter"]).get(
+            name, DEFAULT_SEARCH["n_iter"][name]
+        ),
         cv=splitter,
-        scoring=cfg["search"]["scoring"],
-        random_state=cfg["search"]["random_state"],
+        scoring=search_cfg.get("scoring", DEFAULT_SEARCH["scoring"]),
+        random_state=search_cfg.get("random_state", DEFAULT_SEARCH["random_state"]),
         # The estimators already parallelise internally; letting the search fan out
         # as well oversubscribes the CPU and slows the whole thing down.
         n_jobs=1,
@@ -277,7 +286,8 @@ def train_candidate(
         signature = infer_signature(X_train.head(100), model.predict(X_train.head(100)))
         mlflow.sklearn.log_model(
             sk_model=model,
-            artifact_path="model",
+            name="model",
+            serialization_format="pickle",
             signature=signature,
             input_example=X_train.head(5),
         )
@@ -312,11 +322,24 @@ def select_best(results: list[dict], params: dict) -> dict:
     return chooser(results, key=lambda r: r["metrics"][partition][metric])
 
 
+def enabled_models(cfg: dict) -> list[str]:
+    """Return the ordered set of candidates enabled in params.yaml.
+
+    Older configs in the repo omitted the ``train.models`` block entirely. In that
+    case we keep training all known candidates rather than failing on a missing key.
+    """
+    flags = cfg.get("models")
+    if flags is None:
+        logger.warning("train.models missing from params; defaulting to all candidates.")
+        flags = {name: True for name in DEFAULT_MODELS}
+    return [name for name in DEFAULT_MODELS if flags.get(name, True)]
+
+
 def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
     params = params or load_params()
     cfg = params["train"]
 
-    mlflow.set_tracking_uri((project_path(cfg["tracking_uri"])).as_uri())
+    mlflow.set_tracking_uri(resolve_mlflow_tracking_uri(cfg["tracking_uri"]))
     mlflow.set_experiment(cfg["experiment_name"])
 
     processed_dir = project_path(params["paths"]["processed"])
@@ -335,7 +358,7 @@ def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
         logger.warning("Working tree is dirty; runs will not be fully reproducible.")
 
     artifact_root = ensure_dir(f"{params['paths']['reports']}/training")
-    enabled = [name for name, on in cfg["models"].items() if on]
+    enabled = enabled_models(cfg)
 
     results = [
         train_candidate(name, data, params, lineage, artifact_root) for name in enabled
@@ -352,6 +375,7 @@ def run_training(params: dict | None = None) -> tuple[list[dict], dict]:
     mlflow.sklearn.save_model(
         sk_model=best["estimator"],
         path=export_path,
+        serialization_format="pickle",
         signature=infer_signature(
             data["train"][0].head(100), best["estimator"].predict(data["train"][0].head(100))
         ),

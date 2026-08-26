@@ -1,6 +1,6 @@
 # Drift Simulation Report
 
-- **Generated:** 2026-08-26T03:29:04+00:00
+- **Generated:** 2026-08-26T12:08:56+00:00
 - **Scenario:** `festival_surge` vs reference `baseline`
 - **Window size:** 20,000 trips each (seed 202)
 - _City-wide event: congestion spikes and trips take materially longer._

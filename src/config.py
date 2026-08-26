@@ -46,6 +46,18 @@ def project_path(relative: str | Path) -> Path:
     return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
 
 
+def resolve_mlflow_tracking_uri(value: str | Path) -> str:
+    """Resolve an MLflow tracking URI from params.
+
+    Plain paths stay repo-relative; URI-style values such as ``sqlite:///mlflow.db``
+    are passed through unchanged.
+    """
+    text = str(value)
+    if "://" in text or text.startswith("file:"):
+        return text
+    return project_path(text).as_uri()
+
+
 def ensure_dir(path: str | Path) -> Path:
     """Create a directory (and parents) if missing and return it."""
     resolved = project_path(path)

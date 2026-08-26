@@ -25,7 +25,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-from src.config import load_params, project_path
+from src.config import load_params, project_path, resolve_mlflow_tracking_uri
 from src.features.build_features import FEATURE_COLUMNS, FeaturePipeline
 from src.utils.geo import haversine_km
 from src.utils.logging_utils import get_logger
@@ -97,35 +97,32 @@ class Predictor:
         name = cfg["registered_model_name"]
         models_root = project_path(self._params["paths"]["models"])
 
-        tracking_dir = project_path(cfg["tracking_uri"])
-        if tracking_dir.exists():
-            mlflow.set_tracking_uri(tracking_dir.as_uri())
-            try:
-                from mlflow.tracking import MlflowClient
+        mlflow.set_tracking_uri(resolve_mlflow_tracking_uri(cfg["tracking_uri"]))
+        try:
+            from mlflow.tracking import MlflowClient
 
-                client = MlflowClient()
-                versions = client.search_model_versions(f"name='{name}'")
-                if versions:
-                    latest = max(versions, key=lambda v: int(v.version))
-                    # The native estimator rather than the pyfunc wrapper: pyfunc
-                    # re-validates the frame against the signature on every call, which
-                    # is redundant once Pydantic and the feature contract have both run,
-                    # and it doubled per-request inference cost.
-                    model = mlflow.sklearn.load_model(f"models:/{name}/{latest.version}")
-                    return LoadedModel(
-                        model=model,
-                        name=name,
-                        version=str(latest.version),
-                        source="mlflow-registry",
-                        run_id=latest.run_id,
-                        metadata=metadata,
-                    )
-            except Exception as exc:  # noqa: BLE001 - fall through to the local artefact
-                logger.warning("Registry lookup failed (%s); falling back to run artefact", exc)
+            client = MlflowClient()
+            versions = client.search_model_versions(f"name='{name}'")
+            if versions:
+                latest = max(versions, key=lambda v: int(v.version))
+                # The native estimator rather than the pyfunc wrapper: pyfunc
+                # re-validates the frame against the signature on every call, which
+                # is redundant once Pydantic and the feature contract have both run,
+                # and it doubled per-request inference cost.
+                model = mlflow.sklearn.load_model(f"models:/{name}/{latest.version}")
+                return LoadedModel(
+                    model=model,
+                    name=name,
+                    version=str(latest.version),
+                    source="mlflow-registry",
+                    run_id=latest.run_id,
+                    metadata=metadata,
+                )
+        except Exception as exc:  # noqa: BLE001 - fall through to the local artefact
+            logger.warning("Registry lookup failed (%s); falling back to run artefact", exc)
 
         run_id = metadata.get("best_run_id")
-        if run_id and tracking_dir.exists():
-            mlflow.set_tracking_uri(tracking_dir.as_uri())
+        if run_id:
             model = mlflow.sklearn.load_model(f"runs:/{run_id}/model")
             return LoadedModel(
                 model=model,

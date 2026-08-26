@@ -101,7 +101,7 @@ ruff check .
 always rebuilds the same dataset. Changing a threshold in `params.yaml` invalidates
 only the stages downstream of it.
 
-Browse the experiments with `mlflow ui --backend-store-uri mlruns`.
+Browse the experiments with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 ## Week 1 (M2) — data engineering results
 

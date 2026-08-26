@@ -33,19 +33,19 @@ stages:
     outs:
     - path: data/raw/trips_raw.meta.json
       hash: md5
-      md5: 47d152ceb6c9bdc14debd433dd691e51
+      md5: 03fdcda65304b574625def4d6c511f3e
       size: 1349
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 93980fe93bac3ae9f509288beac2df03
-      size: 8551601
+      md5: f9234ea5a07cb88e4fef3c34a982e024
+      size: 8444280
   validate:
     cmd: python -m src.data.validate
     deps:
     - path: data/raw/trips_raw.parquet
       hash: md5
-      md5: 93980fe93bac3ae9f509288beac2df03
-      size: 8551601
+      md5: f9234ea5a07cb88e4fef3c34a982e024
+      size: 8444280
     - path: src/data/quality.py
       hash: md5
       md5: f9bc127197299af06efdd5314f4baa86
@@ -133,15 +133,15 @@ stages:
     outs:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: 4deaaef0cdb7c1f33b632d3644e3f335
-      size: 11201860
+      md5: be68cb6fdc37c13a5059984944e5a27a
+      size: 11094843
     - path: data/quarantine/quarantined_trips.parquet
       hash: md5
-      md5: 01d3c7f72421742d947c71767edc2ebc
-      size: 480095
+      md5: 536544aec279651f6a9df88c61ecf4c0
+      size: 479796
     - path: reports/validation
       hash: md5
-      md5: a760428355b3853b6c6c60783b3befe1.dir
+      md5: 0a1b7692d5bf70168acea3ea0afa4906.dir
       size: 6888
       nfiles: 3
   split:
@@ -149,8 +149,8 @@ stages:
     deps:
     - path: data/interim/trips_validated.parquet
       hash: md5
-      md5: 4deaaef0cdb7c1f33b632d3644e3f335
-      size: 11201860
+      md5: be68cb6fdc37c13a5059984944e5a27a
+      size: 11094843
     - path: src/data/split.py
       hash: md5
       md5: ab09aee477704611d7f1b6081b38099d
@@ -172,31 +172,31 @@ stages:
       size: 455
     - path: data/interim/test.parquet
       hash: md5
-      md5: dae5b7e2609d4df7255b0296450fdcce
-      size: 1913818
+      md5: 3a97d8768835069eab583128335fd04a
+      size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: f922b73e40652bb1fd823a7524515f40
-      size: 8247803
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
+      size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: 81dfbeddf819bdbdd9281f8725f03eee
-      size: 1912135
+      md5: cd60bd7b4029871827f9b6fc3072c496
+      size: 1911459
   features:
     cmd: python -m src.features.make_features
     deps:
     - path: data/interim/test.parquet
       hash: md5
-      md5: dae5b7e2609d4df7255b0296450fdcce
-      size: 1913818
+      md5: 3a97d8768835069eab583128335fd04a
+      size: 1913504
     - path: data/interim/train.parquet
       hash: md5
-      md5: f922b73e40652bb1fd823a7524515f40
-      size: 8247803
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
+      size: 8147307
     - path: data/interim/val.parquet
       hash: md5
-      md5: 81dfbeddf819bdbdd9281f8725f03eee
-      size: 1912135
+      md5: cd60bd7b4029871827f9b6fc3072c496
+      size: 1911459
     - path: src/features/build_features.py
       hash: md5
       md5: 6c1c6b6c1f08a679469c0cc3a19f8dc6
@@ -236,16 +236,16 @@ stages:
     outs:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: 0c5f76dfbac0289f2abd3eb6d5e0af5c
-      size: 2916479
+      md5: 34e125b3e0d850829fa3ff8f66c967b8
+      size: 2919080
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: 78262fee9ff5d815da3b13771694d537
-      size: 12928642
+      md5: ad2ed24de9d566fd369f53314948407f
+      size: 12805214
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: c75eb867aa48845262a4025d5e2b6644
-      size: 2914720
+      md5: 5fa45e983440b1e22f6c9acb184f33a3
+      size: 2916993
     - path: models/feature_pipeline
       hash: md5
       md5: 572826fa2fd55199d3a253a6d3f8866f.dir
@@ -261,8 +261,8 @@ stages:
     deps:
     - path: data/interim/train.parquet
       hash: md5
-      md5: f922b73e40652bb1fd823a7524515f40
-      size: 8247803
+      md5: 6ba207ae8e1c9bd9ac30647dd3e13c34
+      size: 8147307
     - path: src/data/make_profile.py
       hash: md5
       md5: 64fe1e0d9b404b2ef029ef9f46af9538
@@ -293,16 +293,16 @@ stages:
     deps:
     - path: data/processed/test_features.parquet
       hash: md5
-      md5: 0c5f76dfbac0289f2abd3eb6d5e0af5c
-      size: 2916479
+      md5: 34e125b3e0d850829fa3ff8f66c967b8
+      size: 2919080
     - path: data/processed/train_features.parquet
       hash: md5
-      md5: 78262fee9ff5d815da3b13771694d537
-      size: 12928642
+      md5: ad2ed24de9d566fd369f53314948407f
+      size: 12805214
     - path: data/processed/val_features.parquet
       hash: md5
-      md5: c75eb867aa48845262a4025d5e2b6644
-      size: 2914720
+      md5: 5fa45e983440b1e22f6c9acb184f33a3
+      size: 2916993
     - path: src/features/build_features.py
       hash: md5
       md5: 6c1c6b6c1f08a679469c0cc3a19f8dc6
@@ -321,8 +321,8 @@ stages:
       size: 1960
     - path: src/models/train.py
       hash: md5
-      md5: 6eedd6280b9c5a74fc0acb49631281a5
-      size: 16339
+      md5: e02366eec504dd34808553ddcce43509
+      size: 17414
     - path: src/utils/lineage.py
       hash: md5
       md5: c67cc66d22bccf531e2340959b18b019
@@ -333,7 +333,7 @@ stages:
         train:
           experiment_name: eta-prediction
           registered_model_name: eta-predictor
-          tracking_uri: mlruns
+          tracking_uri: sqlite:///mlflow.db
           selection:
             partition: val
             metric: mae
@@ -356,20 +356,20 @@ stages:
     outs:
     - path: models/trained
       hash: md5
-      md5: d25ca87045a6d34cf1d789b6b8d950a9.dir
-      size: 634308
+      md5: dc547a9c6bd5b6751057f422a7cc9f4d.dir
+      size: 634312
       nfiles: 6
     - path: reports/metrics.json
       hash: md5
-      md5: 5f9298f635135dfa5278443ea4a7acdd
+      md5: 7b5ab853f89b299a79a8fc3324c3e446
       size: 651
     - path: reports/model_comparison.md
       hash: md5
-      md5: b1bbc21fbe80c14f81d3dc034b58d848
+      md5: abee39e2d7dfdf04c8b3633309c0260b
       size: 2742
     - path: reports/training
       hash: md5
-      md5: fd98095b4ca2d42c70b791b6eebcfc86.dir
+      md5: d0ef8b812168c5875d6cdb6804179e02.dir
       size: 544608
       nfiles: 8
   drift_simulation:
@@ -386,8 +386,8 @@ stages:
       nfiles: 2
     - path: models/trained/model
       hash: md5
-      md5: f6de6c86de344cf5534c06e35c79bfc6.dir
-      size: 632226
+      md5: 95e19ecd14a34d6dd193449f551ef17b.dir
+      size: 632248
       nfiles: 5
     - path: src/data/generate_synthetic.py
       hash: md5
@@ -444,19 +444,19 @@ stages:
     outs:
     - path: reports/monitoring/drift_report.json
       hash: md5
-      md5: 8806900cf1ade1008e8fe9207db17857
-      size: 6988
+      md5: 6b575a76ca1111ee447b586cd4870c64
+      size: 6986
     - path: reports/monitoring/drift_report.md
       hash: md5
-      md5: 38ca724f57d1d6a63195e3bfadea62f1
+      md5: 5f9f4dd846fa62f993c828475621c39c
       size: 809
   retraining_decision:
     cmd: python -m src.monitoring.retraining_decision
     deps:
     - path: reports/monitoring/drift_report.json
       hash: md5
-      md5: 8806900cf1ade1008e8fe9207db17857
-      size: 6988
+      md5: 6b575a76ca1111ee447b586cd4870c64
+      size: 6986
     - path: src/monitoring/prediction_log.py
       hash: md5
       md5: 3f14d73429bbc2de9774d990cfd179c7
@@ -485,9 +485,9 @@ stages:
     outs:
     - path: reports/monitoring/retraining_decision.json
       hash: md5
-      md5: 502a46ac1e3382d0123e65db9836fb50
-      size: 1874
+      md5: b48b1cc9e623108ab5370298a551f2bc
+      size: 1869
     - path: reports/monitoring/retraining_decision.md
       hash: md5
-      md5: b67fe01231ca5013521215fb754e5041
+      md5: fa20f44dc752e42680415f1209c6899a
       size: 852

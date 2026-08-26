@@ -125,7 +125,7 @@ split:
 train:
   experiment_name: eta-prediction
   registered_model_name: eta-predictor
-  tracking_uri: mlruns
+  tracking_uri: sqlite:///mlflow.db
 
   # The model is chosen on VALIDATION. The test partition is scored once, for the
   # final report only - selecting on it would make the reported figure a biased
@@ -141,6 +141,22 @@ train:
     # folds of earlier ones and reintroduce exactly the leakage that was avoided.
     strategy: time_series
     n_splits: 3
+
+  search:
+    scoring: neg_mean_absolute_error
+    random_state: 42
+    # Search budget per model. Random Forest is deliberately smaller: each fit is
+    # an order of magnitude more expensive than the alternatives.
+    n_iter:
+      ridge: 12
+      random_forest: 8
+      lightgbm: 20
+
+  models:
+    baseline: true
+    ridge: true
+    random_forest: true
+    lightgbm: true
 
 # --------------------------------------------------------------------------
 # Stage 6: monitoring — drift simulation and retraining trigger (M5)
@@ -204,4 +220,3 @@ monitoring:
     ridge: true
     random_forest: true
     lightgbm: true
-
