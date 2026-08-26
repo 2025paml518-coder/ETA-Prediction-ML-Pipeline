@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
 from mlflow.models import infer_signature
+from sklearn.compose import TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
@@ -96,16 +97,27 @@ def split_xy(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
 # ---------------------------------------------------------------------------
 # Estimators
 # ---------------------------------------------------------------------------
+def _log_target(estimator):
+    """Model log1p(duration): the target is right-skewed, so learning it on the log
+    scale shrinks the long-trip error tail and lowers MAE/MAPE without extra capacity.
+    ``expm1`` inverts the prediction back to minutes, so callers see no difference.
+    """
+    return TransformedTargetRegressor(
+        regressor=estimator, func=np.log1p, inverse_func=np.expm1
+    )
+
+
 def build_estimator(name: str, seed: int):
     if name == "baseline":
         return DummyRegressor(strategy="median")
     if name == "ridge":
         # The scaler belongs inside the pipeline so it is refitted per CV fold.
-        return Pipeline([("scaler", StandardScaler()), ("model", Ridge(random_state=seed))])
+        pipeline = Pipeline([("scaler", StandardScaler()), ("model", Ridge(random_state=seed))])
+        return _log_target(pipeline)
     if name == "random_forest":
-        return RandomForestRegressor(random_state=seed, n_jobs=-1)
+        return _log_target(RandomForestRegressor(random_state=seed, n_jobs=-1))
     if name == "lightgbm":
-        return LGBMRegressor(random_state=seed, n_jobs=-1, verbose=-1)
+        return _log_target(LGBMRegressor(random_state=seed, n_jobs=-1, verbose=-1))
     raise ValueError(f"Unknown model {name!r}")
 
 
@@ -167,7 +179,11 @@ def _residual_plot(y_true: pd.Series, y_pred: np.ndarray, title: str, path: Path
 
 
 def _importance_plot(model: Any, title: str, path: Path) -> list[float] | None:
-    estimator = model.named_steps["model"] if isinstance(model, Pipeline) else model
+    estimator = model
+    if isinstance(estimator, TransformedTargetRegressor):
+        estimator = estimator.regressor_
+    if isinstance(estimator, Pipeline):
+        estimator = estimator.named_steps["model"]
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
     elif hasattr(estimator, "coef_"):

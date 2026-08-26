@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.compose import TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
@@ -107,9 +108,18 @@ class TestEstimators:
     def test_ridge_is_wrapped_in_a_scaler(self):
         """Ridge's L2 penalty is scale-dependent, and this matrix is not scaled."""
         estimator = build_estimator("ridge", seed=42)
-        assert isinstance(estimator, Pipeline)
-        assert isinstance(estimator.named_steps["scaler"], StandardScaler)
-        assert isinstance(estimator.named_steps["model"], Ridge)
+        assert isinstance(estimator, TransformedTargetRegressor)
+        pipeline = estimator.regressor
+        assert isinstance(pipeline, Pipeline)
+        assert isinstance(pipeline.named_steps["scaler"], StandardScaler)
+        assert isinstance(pipeline.named_steps["model"], Ridge)
+
+    def test_learned_models_predict_on_the_log_scale(self):
+        """The target is right-skewed; modelling log1p(duration) shrinks the tail."""
+        estimator = build_estimator("lightgbm", seed=42)
+        assert isinstance(estimator, TransformedTargetRegressor)
+        assert estimator.func is np.log1p
+        assert estimator.inverse_func is np.expm1
 
     def test_baseline_predicts_the_median(self):
         estimator = build_estimator("baseline", seed=42)
