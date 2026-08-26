@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         git \
         jq \
+        lsb-release \
         sudo \
         tar \
         libicu70 \
