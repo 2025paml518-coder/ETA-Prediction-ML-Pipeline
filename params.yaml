@@ -11,6 +11,7 @@ paths:
   drift: data/drift
   models: models
   reports: reports
+  monitoring: monitoring/data
 
 # --------------------------------------------------------------------------
 # Stage 1: synthetic trip generation
@@ -140,6 +141,53 @@ train:
     # folds of earlier ones and reintroduce exactly the leakage that was avoided.
     strategy: time_series
     n_splits: 3
+
+# --------------------------------------------------------------------------
+# Stage 6: monitoring — drift simulation and retraining trigger (M5)
+# --------------------------------------------------------------------------
+monitoring:
+  # Drift is a known intervention on the synthetic generator, not a guess, so the
+  # simulation is fully reproducible: the same scenario and seed always yield the
+  # same reference and drifted windows. Swap `scenario` for monsoon / new_zone /
+  # concept_drift to rehearse a different failure mode.
+  drift:
+    reference_scenario: baseline
+    scenario: festival_surge
+    n_trips: 20000
+    seed: 202
+    start_date: "2024-01-01"
+    end_date: "2024-12-31"
+
+  # The live-error signal reads recent labelled predictions from the serving log.
+  # Below `min_labelled` it abstains rather than voting on thin data, and the whole
+  # signal can be switched off so `dvc repro` stays deterministic on a cold store.
+  lookback:
+    use_live_feedback: true
+    min_labelled: 50
+    max_rows: 5000
+
+  # Every threshold that turns a measured number into a pass / warn / fail verdict.
+  thresholds:
+    # Performance drift: model error on the drifted window relative to the reference
+    # window, plus an absolute floor so a already-poor model still trips regardless
+    # of ratio.
+    perf_mae_warn_ratio: 1.15
+    perf_mae_fail_ratio: 1.30
+    perf_mae_warn_abs_min: 6.0
+    perf_mae_fail_abs_min: 8.0
+    # Feature drift: how many columns Level 3 flags (warn or fail) before the batch
+    # is treated as suspect.
+    feature_warn_columns: 1
+    feature_fail_columns: 2
+    # Live error: mean absolute error over recently labelled predictions.
+    live_mae_warn_min: 6.0
+    live_mae_fail_min: 8.0
+
+  # A retrain is triggered when at least this many independent signals reach 'fail'.
+  # One decisive signal is enough by default; raise it to require two signals to
+  # agree before paying for a retrain.
+  retrain:
+    fail_signals_to_trigger: 1
 
   search:
     scoring: neg_mean_absolute_error

@@ -114,3 +114,49 @@ stages:
       - reports/metrics.json:
           cache: false
 
+  # Week 4 (M5). Drift is a known intervention on the synthetic generator, so this
+  # stage is deterministic: same scenario and seed, same report. It scores the model
+  # on a reference and a drifted window and runs Level 3 checks against the training
+  # baseline, emitting both a performance-drift and a feature-drift signal.
+  drift_simulation:
+    cmd: python -m src.monitoring.drift_simulation
+    deps:
+      - src/monitoring/drift_simulation.py
+      - src/data/generate_synthetic.py
+      - src/data/statistical_validation.py
+      - src/data/validate.py
+      - src/features/build_features.py
+      - src/models/evaluate.py
+      - models/trained/model
+      - models/feature_pipeline
+      - models/data_profile/baseline_profile.json
+    params:
+      - monitoring.drift
+      - monitoring.thresholds
+      - validate.statistical
+    outs:
+      - reports/monitoring/drift_report.json:
+          cache: false
+      - reports/monitoring/drift_report.md:
+          cache: false
+
+  # Turns the drift signals - plus recent labelled traffic from the serving log when
+  # present - into one auditable observe / retrain verdict. The live signal is read
+  # at runtime rather than declared as a DVC dependency, so a cold store still yields
+  # a deterministic decision from the reproducible simulated signals.
+  retraining_decision:
+    cmd: python -m src.monitoring.retraining_decision
+    deps:
+      - src/monitoring/retraining_decision.py
+      - src/monitoring/prediction_log.py
+      - reports/monitoring/drift_report.json
+    params:
+      - monitoring.lookback
+      - monitoring.thresholds
+      - monitoring.retrain
+    outs:
+      - reports/monitoring/retraining_decision.json:
+          cache: false
+      - reports/monitoring/retraining_decision.md:
+          cache: false
+
