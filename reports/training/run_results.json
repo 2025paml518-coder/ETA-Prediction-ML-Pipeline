@@ -1,10 +1,10 @@
 [
   {
     "model_type": "baseline",
-    "run_id": "e8e303198d134372a7685caa939dc81e",
+    "run_id": "771e92e81b0e4bada9afa9bf3717bdf7",
     "params": {},
     "cv_mae": null,
-    "fit_seconds": 0.07,
+    "fit_seconds": 0.071,
     "metrics": {
       "train": {
         "mae": 12.0295,
@@ -12,7 +12,7 @@
         "r2": -0.0743,
         "mape": 66.7639,
         "p90_abs_error": 27.6782,
-        "predict_ms_per_1k": 0.0406
+        "predict_ms_per_1k": 0.043
       },
       "val": {
         "mae": 11.9042,
@@ -20,7 +20,7 @@
         "r2": -0.0687,
         "mape": 67.3884,
         "p90_abs_error": 27.2227,
-        "predict_ms_per_1k": 0.0782
+        "predict_ms_per_1k": 0.0758
       },
       "test": {
         "mae": 12.1366,
@@ -28,123 +28,123 @@
         "r2": -0.0817,
         "mape": 65.0795,
         "p90_abs_error": 28.5594,
-        "predict_ms_per_1k": 0.0654
+        "predict_ms_per_1k": 0.0691
       }
     }
   },
   {
     "model_type": "ridge",
-    "run_id": "3ed604bc032e416fa3b578a5fb2c2c03",
+    "run_id": "8420e2ddf1854a9b8740989dcd105c4e",
     "params": {
-      "model__solver": "cholesky",
-      "model__alpha": 10.0
+      "regressor__model__solver": "saga",
+      "regressor__model__alpha": 10.0
     },
-    "cv_mae": 3.8763304905255134,
-    "fit_seconds": 6.751,
+    "cv_mae": 3.6553313158985117,
+    "fit_seconds": 11.006,
     "metrics": {
       "train": {
-        "mae": 3.8937,
-        "rmse": 5.6973,
-        "r2": 0.8834,
-        "mape": 18.9317,
-        "p90_abs_error": 8.4982,
-        "predict_ms_per_1k": 0.2402
+        "mae": 3.6689,
+        "rmse": 5.6377,
+        "r2": 0.8858,
+        "mape": 15.6404,
+        "p90_abs_error": 8.3986,
+        "predict_ms_per_1k": 0.2597
       },
       "val": {
-        "mae": 3.8282,
-        "rmse": 5.6291,
-        "r2": 0.884,
-        "mape": 18.7224,
-        "p90_abs_error": 8.2057,
-        "predict_ms_per_1k": 0.2936
+        "mae": 3.6441,
+        "rmse": 5.6574,
+        "r2": 0.8828,
+        "mape": 15.5967,
+        "p90_abs_error": 8.327,
+        "predict_ms_per_1k": 0.3475
       },
       "test": {
-        "mae": 3.9513,
-        "rmse": 5.7743,
-        "r2": 0.882,
-        "mape": 18.9773,
-        "p90_abs_error": 8.5964,
-        "predict_ms_per_1k": 0.2926
+        "mae": 3.7456,
+        "rmse": 5.7957,
+        "r2": 0.8812,
+        "mape": 15.7277,
+        "p90_abs_error": 8.4487,
+        "predict_ms_per_1k": 0.284
       }
     }
   },
   {
     "model_type": "random_forest",
-    "run_id": "e898337c100b48d3beaa8fdf58a9181c",
+    "run_id": "fd2e7d0d4b1745c99337ad210463c218",
     "params": {
-      "n_estimators": 300,
-      "min_samples_split": 10,
-      "min_samples_leaf": 2,
-      "max_features": 0.5,
-      "max_depth": 15
+      "regressor__n_estimators": 300,
+      "regressor__min_samples_split": 10,
+      "regressor__min_samples_leaf": 2,
+      "regressor__max_features": 0.5,
+      "regressor__max_depth": 15
     },
-    "cv_mae": 3.5567220773781543,
-    "fit_seconds": 146.914,
+    "cv_mae": 3.5271985792776466,
+    "fit_seconds": 149.202,
     "metrics": {
       "train": {
-        "mae": 2.6108,
-        "rmse": 3.7842,
-        "r2": 0.9485,
-        "mape": 11.6801,
-        "p90_abs_error": 5.9285,
-        "predict_ms_per_1k": 4.9303
+        "mae": 2.6017,
+        "rmse": 3.9033,
+        "r2": 0.9453,
+        "mape": 11.0503,
+        "p90_abs_error": 5.9707,
+        "predict_ms_per_1k": 5.4729
       },
       "val": {
-        "mae": 3.5091,
-        "rmse": 5.2713,
-        "r2": 0.8982,
-        "mape": 15.2812,
-        "p90_abs_error": 7.9664,
-        "predict_ms_per_1k": 6.6908
+        "mae": 3.4922,
+        "rmse": 5.3019,
+        "r2": 0.8971,
+        "mape": 14.9201,
+        "p90_abs_error": 7.9463,
+        "predict_ms_per_1k": 6.5592
       },
       "test": {
-        "mae": 3.5956,
-        "rmse": 5.3774,
-        "r2": 0.8977,
-        "mape": 15.3267,
-        "p90_abs_error": 8.2517,
-        "predict_ms_per_1k": 6.0384
+        "mae": 3.5749,
+        "rmse": 5.3937,
+        "r2": 0.8971,
+        "mape": 14.9583,
+        "p90_abs_error": 8.263,
+        "predict_ms_per_1k": 6.4387
       }
     }
   },
   {
     "model_type": "lightgbm",
-    "run_id": "aaf9a536058f40009fe3f22e0f6679b7",
+    "run_id": "67e5d4e1d8cc4a99abc75a68266e84fe",
     "params": {
-      "subsample": 1.0,
-      "num_leaves": 31,
-      "n_estimators": 200,
-      "min_child_samples": 5,
-      "max_depth": 10,
-      "learning_rate": 0.05,
-      "colsample_bytree": 0.85
+      "regressor__subsample": 1.0,
+      "regressor__num_leaves": 31,
+      "regressor__n_estimators": 200,
+      "regressor__min_child_samples": 5,
+      "regressor__max_depth": 10,
+      "regressor__learning_rate": 0.05,
+      "regressor__colsample_bytree": 0.85
     },
-    "cv_mae": 3.5249770442559014,
-    "fit_seconds": 90.023,
+    "cv_mae": 3.486289057871435,
+    "fit_seconds": 97.884,
     "metrics": {
       "train": {
-        "mae": 3.3924,
-        "rmse": 4.9622,
-        "r2": 0.9115,
-        "mape": 14.9728,
-        "p90_abs_error": 7.8068,
-        "predict_ms_per_1k": 1.5041
+        "mae": 3.4084,
+        "rmse": 5.1211,
+        "r2": 0.9058,
+        "mape": 14.4757,
+        "p90_abs_error": 7.8771,
+        "predict_ms_per_1k": 1.4847
       },
       "val": {
-        "mae": 3.4741,
-        "rmse": 5.2073,
-        "r2": 0.9007,
-        "mape": 15.2049,
-        "p90_abs_error": 7.9651,
-        "predict_ms_per_1k": 2.2365
+        "mae": 3.4445,
+        "rmse": 5.2287,
+        "r2": 0.8999,
+        "mape": 14.7414,
+        "p90_abs_error": 7.8771,
+        "predict_ms_per_1k": 2.1623
       },
       "test": {
-        "mae": 3.5646,
-        "rmse": 5.3375,
-        "r2": 0.8992,
-        "mape": 15.252,
-        "p90_abs_error": 8.2183,
-        "predict_ms_per_1k": 1.5121
+        "mae": 3.5404,
+        "rmse": 5.3357,
+        "r2": 0.8993,
+        "mape": 14.8175,
+        "p90_abs_error": 8.1596,
+        "predict_ms_per_1k": 2.1545
       }
     }
   }

@@ -6,12 +6,12 @@ Experiment: `eta-prediction` | Selection metric: `val_mae` | CV: `time_series` w
 
 | Model         |   Train MAE |   Val MAE |   Test MAE |   Test RMSE |   Test R2 | Test MAPE   |   Test p90 AE | Fit time   |
 |---------------|-------------|-----------|------------|-------------|-----------|-------------|---------------|------------|
-| lightgbm      |       3.392 |     3.474 |      3.565 |       5.338 |    0.8992 | 15.25%      |         8.218 | 90.0s      |
-| random_forest |       2.611 |     3.509 |      3.596 |       5.377 |    0.8977 | 15.33%      |         8.252 | 146.9s     |
-| ridge         |       3.894 |     3.828 |      3.951 |       5.774 |    0.882  | 18.98%      |         8.596 | 6.8s       |
+| lightgbm      |       3.408 |     3.445 |      3.54  |       5.336 |    0.8993 | 14.82%      |         8.16  | 97.9s      |
+| random_forest |       2.602 |     3.492 |      3.575 |       5.394 |    0.8971 | 14.96%      |         8.263 | 149.2s     |
+| ridge         |       3.669 |     3.644 |      3.746 |       5.796 |    0.8812 | 15.73%      |         8.449 | 11.0s      |
 | baseline      |      12.03  |    11.904 |     12.137 |      17.485 |   -0.0817 | 65.08%      |        28.559 | 0.1s       |
 
-Rows are ordered by validation MAE, which is the metric selection used. **lightgbm** was chosen (run `aaf9a536`).
+Rows are ordered by validation MAE, which is the metric selection used. **lightgbm** was chosen (run `67e5d4e1`).
 
 ## How the winner was chosen
 
@@ -21,16 +21,16 @@ Cross-validation inside the hyperparameter search uses `TimeSeriesSplit` rather 
 
 ## Findings
 
-- **lightgbm** reduces test MAE from the median baseline's 12.14 min to 3.56 min, a 70.6% improvement. The baseline is what the service would achieve with no model at all, so this is the margin that justifies operating one.
-- Validation MAE 3.474 min versus test MAE 3.565 min (difference +0.091 min). The two agree closely, so selecting on validation did not overfit the choice.
-- Train MAE 3.392 min against validation 3.474 min (spread +0.082 min). The model is not memorising the training period.
-- RMSE 5.34 min exceeds MAE 3.56 min, and the 90th-percentile absolute error is 8.22 min: errors are concentrated in a minority of long or unusual trips rather than spread evenly.
-- Runner-up **random_forest** trails by 0.035 min val MAE while taking +56.9s longer to fit.
+- **lightgbm** reduces test MAE from the median baseline's 12.14 min to 3.54 min, a 70.8% improvement. The baseline is what the service would achieve with no model at all, so this is the margin that justifies operating one.
+- Validation MAE 3.445 min versus test MAE 3.540 min (difference +0.096 min). The two agree closely, so selecting on validation did not overfit the choice.
+- Train MAE 3.408 min against validation 3.445 min (spread +0.036 min). The model is not memorising the training period.
+- RMSE 5.34 min exceeds MAE 3.54 min, and the 90th-percentile absolute error is 8.16 min: errors are concentrated in a minority of long or unusual trips rather than spread evenly.
+- Runner-up **random_forest** trails by 0.048 min val MAE while taking +51.3s longer to fit.
 
 ## Reproducing the selected run
 
 ```bash
-python -m src.models.reproduce_run --run-id aaf9a536058f40009fe3f22e0f6679b7
+python -m src.models.reproduce_run --run-id 67e5d4e1d8cc4a99abc75a68266e84fe
 ```
 
 Each run records its git commit, working-tree cleanliness and the DVC md5 of every dataset it consumed, so a run identifies the exact code and data that produced it.

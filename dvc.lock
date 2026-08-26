@@ -317,12 +317,12 @@ stages:
       size: 1757
     - path: src/models/hyperparameters.py
       hash: md5
-      md5: fa811ed5c22068f1e80ee029c7bd9f82
-      size: 1548
+      md5: 5e8bb7285ab96d544a1f5aa136140c53
+      size: 1960
     - path: src/models/train.py
       hash: md5
-      md5: 23edcef33a49f961c408e67bd5611d7d
-      size: 15670
+      md5: 6eedd6280b9c5a74fc0acb49631281a5
+      size: 16339
     - path: src/utils/lineage.py
       hash: md5
       md5: c67cc66d22bccf531e2340959b18b019
@@ -356,19 +356,19 @@ stages:
     outs:
     - path: models/trained
       hash: md5
-      md5: 4888c619908e38ab6467c4f7478cd597.dir
-      size: 608073
+      md5: d25ca87045a6d34cf1d789b6b8d950a9.dir
+      size: 634308
       nfiles: 6
     - path: reports/metrics.json
       hash: md5
-      md5: 118b49854a0194576ba29910b81f7ccc
-      size: 650
+      md5: 5f9298f635135dfa5278443ea4a7acdd
+      size: 651
     - path: reports/model_comparison.md
       hash: md5
-      md5: 60c19cd145ad9939424cb5ad4168ee23
+      md5: b1bbc21fbe80c14f81d3dc034b58d848
       size: 2742
     - path: reports/training
       hash: md5
-      md5: 4189f334e426bdd97ff3b9e867738b55.dir
-      size: 546867
+      md5: fd98095b4ca2d42c70b791b6eebcfc86.dir
+      size: 544608
       nfiles: 8
