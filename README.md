@@ -1,5 +1,7 @@
 # ETA-Prediction-ML-Pipeline
 
+[![CI](https://github.com/2025paml518-coder/ETA-Prediction-ML-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/2025paml518-coder/ETA-Prediction-ML-Pipeline/actions/workflows/ci.yml)
+
 End-to-end machine learning pipeline for **delivery / ride ETA prediction**, built for
 the BITS Pilani WILP course **Machine Learning Engineering (PCAM\* ZC412)** — EC-1
 Mini-Project, Flavor A.

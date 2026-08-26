@@ -1,0 +1,44 @@
+name: CI
+
+# Reproducibility is graded (M3), so CI does not merely run unit tests against
+# committed fixtures — it regenerates the Week 1 data artefacts from code with
+# `dvc repro`, then runs the suite against them. The synthetic generator is
+# self-contained, so this needs no DVC remote or credentials.
+#
+# Training is deliberately skipped: the hyper-parameter search is slow and the
+# model-dependent tests skip themselves when no trained artefact is present.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Build data artefacts (DVC, through the features stage)
+        run: dvc repro features
+
+      - name: Run tests
+        run: pytest -q
