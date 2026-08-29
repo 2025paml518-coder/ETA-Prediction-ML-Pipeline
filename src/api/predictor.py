@@ -123,15 +123,18 @@ class Predictor:
 
         run_id = metadata.get("best_run_id")
         if run_id:
-            model = mlflow.sklearn.load_model(f"runs:/{run_id}/model")
-            return LoadedModel(
-                model=model,
-                name=name,
-                version=f"run-{run_id[:8]}",
-                source="mlflow-run",
-                run_id=run_id,
-                metadata=metadata,
-            )
+            try:
+                model = mlflow.sklearn.load_model(f"runs:/{run_id}/model")
+                return LoadedModel(
+                    model=model,
+                    name=name,
+                    version=f"run-{run_id[:8]}",
+                    source="mlflow-run",
+                    run_id=run_id,
+                    metadata=metadata,
+                )
+            except Exception as exc:  # noqa: BLE001 - fall through to the local export
+                logger.warning("Run artefact lookup failed (%s); falling back to local export", exc)
 
         # Standalone export. This is what the container ships: one model directory
         # rather than the entire tracking store.
