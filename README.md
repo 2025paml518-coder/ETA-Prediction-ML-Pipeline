@@ -77,21 +77,38 @@ retraining trigger calls to rebuild the model.
 
 ## Setup
 
-Requires **Python 3.11** and, from Week 3, **Podman**.
+The project requires **Python 3.11** (`>=3.11,<3.12`). **Podman** is also
+required from Week 3 for the containerized API and monitoring stack. The
+commands below are for Windows PowerShell; run them from the repository root.
 
 ```powershell
+cd D:\gitrepo\ETA-Prediction-ML-Pipeline
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Exact resolved versions are pinned in `requirements.lock.txt`.
+If PowerShell blocks activation, enable it for the current user and activate
+the environment again:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+.\.venv\Scripts\Activate.ps1
+```
+
+Exact resolved versions are pinned in `requirements.lock.txt`. Verify that the
+virtual environment is active before running project commands:
+
+```powershell
+python --version
+where.exe python
+```
 
 ## Reproduce the pipeline
 
 ```powershell
 dvc repro          # generate -> validate -> split -> features -> profile -> train
-dvc push           # store data artefacts in the configured remote
 dvc metrics show   # headline model metrics
 pytest             # guards over validation, features, statistics, skew and models
 ruff check .
@@ -101,7 +118,62 @@ ruff check .
 always rebuilds the same dataset. Changing a threshold in `params.yaml` invalidates
 only the stages downstream of it.
 
-Browse the experiments with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+Use `dvc push` only when a DVC remote is configured:
+
+```powershell
+dvc push
+```
+
+### Start the services
+
+Start each long-running service in a separate PowerShell window, with the
+virtual environment activated.
+
+Start MLflow using the absolute SQLite path so the UI and training process use
+the same tracking database. On Windows, do not pass `--workers`:
+
+```powershell
+mlflow ui `
+  --backend-store-uri "sqlite:///D:/gitrepo/ETA-Prediction-ML-Pipeline/mlflow.db" `
+  --host 127.0.0.1 `
+  --port 5000
+```
+
+Open the MLflow UI at <http://127.0.0.1:5000> and select the `eta-prediction`
+experiment.
+
+Start the REST API:
+
+```powershell
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+```
+
+Use Swagger at <http://127.0.0.1:8000/docs>. The main endpoints are
+`POST /predict`, `POST /predict/batch`, `POST /feedback`, `GET /health`,
+`GET /ready`, and `GET /metrics`.
+
+Run the Week 4 monitoring workflow after the API has produced prediction logs:
+
+```powershell
+python -m src.monitoring.analyze_drift
+python -m src.monitoring.retrain
+```
+
+To demonstrate drift without live API traffic, use a built-in scenario:
+
+```powershell
+python -m src.monitoring.analyze_drift --simulate-scenario concept_drift
+python -m src.monitoring.retrain --simulate-scenario concept_drift
+```
+
+For the complete containerized stack (API, Prometheus, and Grafana):
+
+```powershell
+podman-compose up --build
+```
+
+The containerized services are available at the API on port `8000`,
+Prometheus on port `9090`, and Grafana on port `3000`.
 
 ## Week 1 (M2) — data engineering results
 
